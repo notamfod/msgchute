@@ -3,6 +3,7 @@ package sender
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -15,15 +16,21 @@ import (
 	"github.com/devian2011/msgchute/pkg/generate"
 )
 
+var ErrUnknownTransport = errors.New("unknown transport")
+
 type Queue struct {
+	templates   TemplateGenerator
+	providers   map[string]*ProviderConfig
 	ctx         context.Context
 	db          *sqlx.DB
 	taskRepo    taskRepo
 	messageRepo messageRepo
 }
 
-func NewQueue(ctx context.Context, db *sqlx.DB, taskRepo taskRepo, messageRepo messageRepo) *Queue {
+func NewQueue(ctx context.Context, db *sqlx.DB, taskRepo taskRepo, messageRepo messageRepo, providers map[string]*ProviderConfig, templates TemplateGenerator) *Queue {
 	return &Queue{
+		templates:   templates,
+		providers:   providers,
 		ctx:         ctx,
 		db:          db,
 		taskRepo:    taskRepo,
@@ -32,6 +39,12 @@ func NewQueue(ctx context.Context, db *sqlx.DB, taskRepo taskRepo, messageRepo m
 }
 
 func (s *Queue) Add(message *dto.Message) (*dto.Message, *dto.Task, error) {
+	if s.providers[message.Transport] == nil {
+		return nil, nil, fmt.Errorf("%w: %s", ErrUnknownTransport, message.Transport)
+	}
+	if _, _, err := s.templates.GenerateMessage(message); err != nil {
+		return nil, nil, err
+	}
 	message.ID = generate.ID()
 	now := time.Now()
 
@@ -99,14 +112,29 @@ func (s *Queue) Add(message *dto.Message) (*dto.Message, *dto.Task, error) {
 
 // Retry send repeat action for message
 func (s *Queue) Retry(mrr *dto.MessageRetryRequest) (*dto.Message, *dto.Task, error) {
-	var msg *dto.Message
+	msg, err := s.messageRepo.GetByID(s.ctx, mrr.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if msg == nil {
+		return nil, nil, errors.New("message not found")
+	}
+	if s.providers[msg.Transport] == nil {
+		return nil, nil, fmt.Errorf("%w: %s", ErrUnknownTransport, msg.Transport)
+	}
+	if _, _, err := s.templates.GenerateMessage(msg); err != nil {
+		return nil, nil, err
+	}
 	var task *dto.Task
-	err := storage.InTransaction(context.Background(), s.db, func(ctx context.Context) error {
+	err = storage.InTransaction(context.Background(), s.db, func(ctx context.Context) error {
 		now := time.Now()
-		var getErr error
-		msg, getErr = s.messageRepo.GetByID(ctx, mrr.ID)
-		if getErr != nil {
-			return getErr
+		// Serialize retries for this message before checking existing tasks.
+		locked, err := s.messageRepo.GetByID(ctx, mrr.ID)
+		if err != nil {
+			return err
+		}
+		if locked == nil {
+			return errors.New("message not found")
 		}
 
 		taskMap, selectErr := s.taskRepo.List(ctx, dto.TaskFilter{

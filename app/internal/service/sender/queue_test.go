@@ -16,6 +16,12 @@ import (
 	"github.com/devian2011/msgchute/internal/dto"
 )
 
+type queueTestGenerator struct{}
+
+func (queueTestGenerator) GenerateMessage(*dto.Message) (string, string, error) {
+	return "", "test", nil
+}
+
 func TestQueue_Add(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -109,7 +115,7 @@ func TestQueue_Add(t *testing.T) {
 			mockTaskRepo := new(MockTaskRepo)
 			mockMsgRepo := new(MockMessageRepo)
 
-			queue := NewQueue(context.Background(), sqlxDB, mockTaskRepo, mockMsgRepo)
+			queue := NewQueue(context.Background(), sqlxDB, mockTaskRepo, mockMsgRepo, map[string]*ProviderConfig{"email": {}, "sms": {}, "push": {}}, queueTestGenerator{})
 
 			switch {
 			case tt.mockMsgErr != nil:
@@ -159,6 +165,16 @@ func TestQueue_Add(t *testing.T) {
 			assert.NoError(t, sqlMock.ExpectationsWereMet())
 		})
 	}
+}
+
+func TestQueueRejectsUnknownTransportBeforePersistence(t *testing.T) {
+	queue := NewQueue(context.Background(), nil, nil, nil, map[string]*ProviderConfig{"beeline": {}}, queueTestGenerator{})
+	message := &dto.Message{Transport: "yamail"}
+	assert.NotPanics(t, func() {
+		_, _, err := queue.Add(message)
+		assert.Error(t, err)
+		assert.Equal(t, uuid.Nil, message.ID)
+	})
 }
 
 func TestQueue_Retry(t *testing.T) {
@@ -337,18 +353,22 @@ func TestQueue_Retry(t *testing.T) {
 			defer db.Close()
 
 			sqlxDB := sqlx.NewDb(db, "postgres")
-			sqlMock.ExpectBegin()
+			if tt.mockMsgErr == nil {
+				sqlMock.ExpectBegin()
+			}
 
 			mockTaskRepo := new(MockTaskRepo)
 			mockMsgRepo := new(MockMessageRepo)
 
-			queue := NewQueue(context.Background(), sqlxDB, mockTaskRepo, mockMsgRepo)
+			queue := NewQueue(context.Background(), sqlxDB, mockTaskRepo, mockMsgRepo, map[string]*ProviderConfig{"email": {}, "sms": {}, "push": {}}, queueTestGenerator{})
 
-			mockMsgRepo.On("GetByID", mock.Anything, tt.request.ID).Return(tt.mockMsg, tt.mockMsgErr).Once()
+			lookupCount := 1
+			if tt.mockMsgErr == nil {
+				lookupCount = 2
+			}
+			mockMsgRepo.On("GetByID", mock.Anything, tt.request.ID).Return(tt.mockMsg, tt.mockMsgErr).Times(lookupCount)
 
-			if tt.mockMsgErr != nil {
-				sqlMock.ExpectRollback()
-			} else {
+			if tt.mockMsgErr == nil {
 				mockTaskRepo.On("List", mock.Anything, mock.Anything).
 					Return(tt.mockTaskMap, tt.mockTaskErr).Once()
 

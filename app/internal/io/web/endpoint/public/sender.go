@@ -1,6 +1,7 @@
 package public
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -8,6 +9,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/devian2011/msgchute/internal/dto"
+	"github.com/devian2011/msgchute/internal/service/sender"
+	"github.com/devian2011/msgchute/internal/service/template"
 	"github.com/devian2011/msgchute/pkg/http/response"
 )
 
@@ -72,6 +75,10 @@ func (e *SenderEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Schedule:   msgRequest.Schedule,
 	})
 	if sendErr != nil {
+		if errors.Is(sendErr, sender.ErrUnknownTransport) || errors.Is(sendErr, template.ErrMissingParameters) {
+			response.WriteErrorResponse(w, r, http.StatusBadRequest, sendErr)
+			return
+		}
 		response.WriteErrorResponse(w, r, http.StatusInternalServerError, sendErr)
 		return
 	}
@@ -174,6 +181,10 @@ func (e *MessageRetryEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
 	m, t, err := e.h.Handle(request)
 	if err != nil {
+		if errors.Is(err, sender.ErrUnknownTransport) || errors.Is(err, template.ErrMissingParameters) {
+			response.WriteErrorResponse(w, r, http.StatusBadRequest, err)
+			return
+		}
 		response.WriteErrorResponse(w, r, http.StatusInternalServerError, err)
 		return
 	}

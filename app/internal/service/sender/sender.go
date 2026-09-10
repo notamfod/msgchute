@@ -116,7 +116,7 @@ func (s *Sender) sendFunc(_ context.Context, payload []byte) (string, *retrier.E
 	if generateErr != nil {
 		return "", &retrier.ExecutionError{
 			Err: fmt.Errorf("error generate task message payload: %s, err: %v",
-				string(payload), getProviderErr),
+				string(payload), generateErr),
 			State: retrier.CriticalState,
 		}
 	}

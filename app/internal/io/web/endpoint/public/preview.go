@@ -1,11 +1,13 @@
 package public
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/bytedance/sonic"
 
 	"github.com/devian2011/msgchute/internal/dto"
+	"github.com/devian2011/msgchute/internal/service/template"
 	"github.com/devian2011/msgchute/pkg/http/response"
 )
 
@@ -55,6 +57,10 @@ func (e *MessagePreviewEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Reques
 
 	preview, previewErr := e.h.Handle(msg)
 	if previewErr != nil {
+		if errors.Is(previewErr, template.ErrMissingParameters) {
+			response.WriteErrorResponse(w, r, http.StatusBadRequest, previewErr)
+			return
+		}
 		response.WriteErrorResponse(w, r, http.StatusInternalServerError, previewErr)
 		return
 	}

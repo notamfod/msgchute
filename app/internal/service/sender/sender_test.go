@@ -251,6 +251,7 @@ func TestSender_sendFunc(t *testing.T) {
 		require.NotNil(t, execErr)
 		assert.Equal(t, retrier.CriticalState, execErr.State)
 		assert.Contains(t, execErr.Err.Error(), "error generate task message payload")
+		assert.ErrorContains(t, execErr.Err, "template error")
 		tmplGen.AssertExpectations(t)
 		pm.AssertExpectations(t)
 	})

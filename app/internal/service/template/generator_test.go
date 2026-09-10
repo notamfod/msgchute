@@ -36,7 +36,7 @@ func TestGenerator_GenerateString(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "Fallback to default params",
+			name: "Missing parameter is rejected even with default",
 			args: args{
 				tmpl:          "Hello, {{ name }}!",
 				messageParams: map[string]*dto.MessageParam{},
@@ -44,8 +44,8 @@ func TestGenerator_GenerateString(t *testing.T) {
 					"name": {Default: "Guest"},
 				},
 			},
-			want:    "Hello, Guest!",
-			wantErr: false,
+			want:    "",
+			wantErr: true,
 		},
 		{
 			name: "Success with uppercase filter",
@@ -120,6 +120,31 @@ func TestGenerator_buildParams(t *testing.T) {
 	}
 	if res["age"] != "not specified" {
 		t.Errorf("Expected 'not specified', got: %v", res["age"])
+	}
+}
+
+func TestRequiredParameterValues(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		param *dto.MessageParam
+		valid bool
+	}{
+		{"absent", nil, false},
+		{"null", &dto.MessageParam{}, false},
+		{"blank", &dto.MessageParam{Value: " \t"}, false},
+		{"zero", &dto.MessageParam{Value: 0}, true},
+		{"false", &dto.MessageParam{Value: false}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g, err := NewGenerator()
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = g.GenerateString("{{ value }}", map[string]*dto.MessageParam{"value": tc.param}, map[string]*dto.TemplateParam{"value": {Default: "fallback"}})
+			if (err == nil) != tc.valid {
+				t.Fatalf("valid=%v, error=%v", tc.valid, err)
+			}
+		})
 	}
 }
 
