@@ -18,6 +18,14 @@ To maintain security best practices and keep production configurations clean:
 * **Environment Variables**: Sensitive values or application overrides can be injected directly via system environment variables (`ENV`).
 * **Dotenv Support**: For local development or isolated containers, the service automatically loads secrets from a `.env` file located in the root directory.
 
+### Multiple delivery profiles
+
+Keys under `providers.providers` identify configured delivery profiles. Add a separate key for each account or default sender, for example `sales_mail` and `support_mail`, both with `provider: smtp` but different `params.from` and credentials as required by the SMTP server. Copy the existing worker/breaker settings for each instance. The request selects the profile through `transport`; `sender_id` remains the initiator.
+
+SMS originators depend on the plugin and provider account. For a plugin supporting `params.sender`, configure each approved originator in its own instance. A Beeline account may determine the originator itself; adding a profile cannot grant an unregistered sender name. SMTP also supports a per-message From override, subject to the SMTP server's rules; the catalog reports only the configured default.
+
+`GET /api/v1/transports` lists the configured profile codes and provider types without credentials. Explicit SMTP `from` and SMSC `sender` defaults are included when set. A missing `sender` is not an error. No new sender database or request field is needed.
+
 ### Example
 
 ```yaml

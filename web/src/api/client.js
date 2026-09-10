@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { useConfigStore } from '@/stores/config';
 
-const apiClient = axios.create();
+const apiClient = axios.create({timeout: 15000});
 
 apiClient.interceptors.request.use((config) => {
     const configStore = useConfigStore();

@@ -39,6 +39,7 @@ type Handlers struct {
 }
 
 type PublicHandlers struct {
+	Transports  []sender.Transport
 	Sender      *public.SenderHandler
 	BatchSender *public.BatchSenderHandler
 	Retrier     *public.RetryHandler

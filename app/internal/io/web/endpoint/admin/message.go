@@ -26,7 +26,7 @@ func NewMessageRecipientFinderEndpoint(h messageRecipientFindHandler) *MessageRe
 }
 
 // @Summary		Get recipients list
-// @Description	Returns a list of unique recipient addresses (emails, phone numbers, etc.) from all messages.
+// @Description	Returns historical recipient filter suggestions from stored messages, not recipient types or an address book.
 // @Description	If the `search` parameter is provided, the result is filtered by case‑insensitive substring match.
 // @Tags			admin.messages
 // @Accept			json
@@ -57,7 +57,7 @@ func NewMessageDictionaryEndpoint(h messageDictionaryHandler) *MessageDictionary
 }
 
 // @Summary		Get message dictionaries
-// @Description	Returns reference data used for filtering messages: available transports, statuses, template codes, and senders.
+// @Description	Returns historical message filters, including old or invalid transports. Use /api/v1/transports for configured delivery profiles.
 // @Tags			admin.dictionaries
 // @Accept			json
 // @Produce		json

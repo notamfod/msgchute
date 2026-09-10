@@ -126,6 +126,7 @@ func managementAPI(r *chi.Mux, handlers *registry.Handlers) *chi.Mux {
 }
 
 func publicAPI(r *chi.Mux, handlers *registry.Handlers) *chi.Mux {
+	r.Method(http.MethodGet, "/api/v1/transports", public.NewTransportsEndpoint(handlers.Public.Transports))
 	r.HandleFunc("/ping", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
 		writer.Write([]byte("pong"))

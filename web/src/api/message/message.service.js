@@ -3,6 +3,9 @@ import qs from 'qs';
 import {FullMessageInfoDto, MessageDictionariesDto, MessageFinderResponseDto, MessageSendResponse} from './message.dto';
 
 export const messageService = {
+    async getTransports() {
+        return await apiClient.get('/api/v1/transports');
+    },
     async getMessages(page = 1, perPage = 10, filters = {}) {
         const cleanedFilters = {};
         Object.keys(filters).forEach(key => {

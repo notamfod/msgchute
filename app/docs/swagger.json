@@ -10,7 +10,7 @@
     "paths": {
         "/api/admin/v1/dictionary/message": {
             "get": {
-                "description": "Returns reference data used for filtering messages: available transports, statuses, template codes, and senders.",
+                "description": "Returns historical message filters, including old or invalid transports. Use /api/v1/transports for configured delivery profiles.",
                 "consumes": [
                     "application/json"
                 ],
@@ -39,7 +39,7 @@
         },
         "/api/admin/v1/dictionary/message-recipients": {
             "get": {
-                "description": "Returns a list of unique recipient addresses (emails, phone numbers, etc.) from all messages.\nIf the `search` parameter is provided, the result is filtered by case‑insensitive substring match.",
+                "description": "Returns historical recipient filter suggestions from stored messages, not recipient types or an address book.\nIf the `search` parameter is provided, the result is filtered by case‑insensitive substring match.",
                 "consumes": [
                     "application/json"
                 ],
@@ -610,6 +610,41 @@
                     }
                 }
             }
+        },
+        "/api/v1/transports": {
+            "get": {
+                "description": "Available means configured for acceptance, not remote provider health. Credentials are omitted.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public.messages"
+                ],
+                "summary": "List configured delivery profiles",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/github_com_devian2011_msgchute_internal_service_sender.Transport"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -948,6 +983,23 @@
                 "$ref": "#/definitions/github_com_devian2011_msgchute_internal_dto.TemplateParam"
             }
         },
+        "github_com_devian2011_msgchute_internal_service_sender.Transport": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "sender": {
+                    "type": "string"
+                }
+            }
+        },
         "github_com_devian2011_msgchute_pkg_http_pagination.PageData": {
             "type": "object",
             "properties": {
@@ -1084,6 +1136,7 @@
         },
         "time.Duration": {
             "type": "integer",
+            "format": "int64",
             "enum": [
                 -9223372036854775808,
                 9223372036854775807,

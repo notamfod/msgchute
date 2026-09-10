@@ -222,6 +222,17 @@ definitions:
     additionalProperties:
       $ref: '#/definitions/github_com_devian2011_msgchute_internal_dto.TemplateParam'
     type: object
+  github_com_devian2011_msgchute_internal_service_sender.Transport:
+    properties:
+      available:
+        type: boolean
+      code:
+        type: string
+      provider:
+        type: string
+      sender:
+        type: string
+    type: object
   github_com_devian2011_msgchute_pkg_http_pagination.PageData:
     properties:
       current_page:
@@ -322,6 +333,7 @@ definitions:
     - 1000000000
     - 60000000000
     - 3600000000000
+    format: int64
     type: integer
     x-enum-varnames:
     - minDuration
@@ -342,8 +354,8 @@ paths:
     get:
       consumes:
       - application/json
-      description: 'Returns reference data used for filtering messages: available
-        transports, statuses, template codes, and senders.'
+      description: Returns historical message filters, including old or invalid transports.
+        Use /api/v1/transports for configured delivery profiles.
       produces:
       - application/json
       responses:
@@ -363,7 +375,7 @@ paths:
       consumes:
       - application/json
       description: |-
-        Returns a list of unique recipient addresses (emails, phone numbers, etc.) from all messages.
+        Returns historical recipient filter suggestions from stored messages, not recipient types or an address book.
         If the `search` parameter is provided, the result is filtered by case‑insensitive substring match.
       parameters:
       - description: Search substring to filter recipients (case‑insensitive). If
@@ -749,6 +761,27 @@ paths:
           schema:
             $ref: '#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response'
       summary: Send message
+      tags:
+      - public.messages
+  /api/v1/transports:
+    get:
+      description: Available means configured for acceptance, not remote provider
+        health. Credentials are omitted.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/github_com_devian2011_msgchute_internal_service_sender.Transport'
+                  type: array
+              type: object
+      summary: List configured delivery profiles
       tags:
       - public.messages
 securityDefinitions:

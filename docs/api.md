@@ -5,13 +5,57 @@
 This service provides an HTTP interface for sending notifications via various transports (email, SMS, messengers, etc.) with support for templates, retries, and administrative management.
 
 **🔐 Authentication**  
-All administrative endpoints (prefix `/api/admin/`) require a **Bearer token** in the `Authorization` header:
-
-Authorization: Bearer <token>
+Authentication is determined by the configured auth plugin. Use the header and token issued by your deployment; do not put tokens in URLs. A plugin may use `Authorization: Bearer <token>` or an integration header such as `X-Internal-Token`.
 
 - - -
 
 ## 📬 Public Endpoints
+
+GET `/api/v1/transports`
+
+Returns configured delivery profiles, sorted by `code`, in the standard response envelope:
+
+```json
+{"status":"success","data":[{"code":"sales_mail","provider":"smtp","available":true,"sender":"sales@example.com"}]}
+```
+
+Use `code` as the send request's `transport`. Multiple codes can use the same provider with different accounts or senders. `available` means configured for acceptance by this service, not that the remote provider is healthy or that delivery is guaranteed. Only configured profiles are returned; removing a profile from configuration removes it from this catalog and makes new sends/retries reject its code. Configuration changes require restart.
+
+`sender` is an optional configured default (`smtp.params.from` or `smsc.params.sender`), not the request's `sender_id`. An omitted sender means the plugin or account determines it. Provider credentials and arbitrary plugin parameters are never returned. See [profile configuration](config.md#multiple-delivery-profiles).
+
+Historical dictionaries are separate:
+
+* `GET /api/admin/v1/dictionary/message` supplies filters from stored messages, including old or invalid transport codes. Do not use it for composing new messages.
+* `GET /api/admin/v1/dictionary/message-recipients?search=...` supplies historical recipient filter suggestions. Without `search` it returns all distinct historical recipients. It is not an address book or a recipient type specification.
+
+For SMS integrations, send international phone numbers such as `+79261234567` without spaces or punctuation. For email, use an address such as `user@example.com`. Other plugins define their own recipient format. The generic service does not enforce a universal phone/email format for every plugin.
+
+### Template values and client workflow
+
+All parameters declared by a selected template must be supplied as `{ "name": { "value": ... } }`. Missing, null, empty or whitespace-only string values are rejected; zero and false are valid. Stored defaults do not fill omitted values. Templates with no parameters remain valid.
+
+The client supplies values it knows and asks the user for the remaining required values. The service does not classify parameters as manual or automatic. A shared template works across systems when each can supply its declared fields; create a distinct template only when the actual content or required data differs.
+
+```json
+{
+  "sender_id": "1c",
+  "transport": "beeline",
+  "recipients": ["+79261234567"],
+  "code": "sms_notify_on_checkout",
+  "params": {"order_number": {"value": "17829"}},
+  "schedule": "2026-09-10T14:45:00+03:00"
+}
+```
+
+The profile and template in this example must exist in your deployment. `sender_id` identifies the initiating system or user; it does not set the SMS originator or email From.
+
+Send `schedule` and `deadline` with an explicit RFC3339 offset. `14:45:00+03:00` and `11:45:00Z` represent the same instant. Do not append `Z` to Moscow local clock digits. The dashboard converts the browser's local datetime to UTC before sending; a 1C client must perform its own timezone conversion.
+
+HTTP 200 from send means accepted into the queue, not delivered. Save the returned message ID. Unknown transport codes and missing required template values return HTTP 400 before a new message/task is persisted; batch requests report errors per item.
+
+For status polling, read `GET /api/admin/v1/message/{id}` with authorized credentials. A client can poll every two seconds for up to one minute, with an individual request timeout, then stop and show the last known status with a manual refresh action. Stop earlier on `succeeded`, `failed`, or `declined`; `running` is not terminal. A delayed message may legitimately remain running until its schedule. Task statuses are separate: `pending`, `success`, `failure`; `is_processed` is a processing flag, not the delivery outcome.
+
+Polling timeout means the result is still unknown, not failed. Never automatically repeat send/retry on a timeout: the first request may have been accepted. If no ID was received, inspect message history before resubmitting. Provider success may mean provider acceptance rather than handset delivery, depending on the plugin.
 
 POST `/api/v1/send`
 
@@ -23,13 +67,13 @@ Object `SenderMessageRequest` (or `Message`) – see structure below.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `sender_id` | string | Sender identifier (required) |
+| `sender_id` | string | Initiating system or user identifier (required) |
 | `recipients` | \[\]string | List of recipients (email, phone, etc.) (required) |
 | `subject` | string | Message subject |
 | `body` | string | Message body (may contain template placeholders) |
 | `code` | string | Template code if using a predefined template |
-| `params` | object | Parameters for template substitution (key → value) |
-| `transport` | string | Delivery transport (e.g., `email`, `sms`) (required) |
+| `params` | object | Template values: `{"name":{"value":"..."}}` |
+| `transport` | string | Configured profile code from `/api/v1/transports` (required) |
 | `schedule` | string (datetime) | Scheduled send time (RFC3339) |
 | `deadline` | string (datetime) | Deadline for processing |
 | `meta` | object | Additional metadata (CC, BCC, attachments, etc.) |
@@ -39,8 +83,8 @@ Object `SenderMessageRequest` (or `Message`) – see structure below.
 
 | Code | Description | Schema |
 | --- | --- | --- |
-| 200 | Successfully processed | `AddMessageResponse` (fields: `message`, `task`) |
-| 400 | Invalid JSON or structure | `Response` |
+| 200 | Accepted into queue | `AddMessageResponse` (fields: `message`, `task`) |
+| 400 | Invalid JSON, unknown transport or missing template values | `Response` |
 | 500 | Internal server error | `Response` |
 
 POST `/api/v1/batch/send`
@@ -109,7 +153,7 @@ Object `PreviewMessageRequest`:
 
 ## 🛠️ Administrative Endpoints
 
-_All admin endpoints require Bearer token authentication._
+_Admin access is controlled by the configured auth plugin._
 
 GET `/api/admin/v1/message`
 

@@ -6,17 +6,17 @@
 
           <!-- 1. IDENTITIES & DELIVERY TARGETS -->
           <BCol md="6">
-            <BFormGroup label="Sender ID:" class="small fw-semibold text-muted">
+            <BFormGroup label="Initiator ID (not the SMS or email sender):" class="small fw-semibold text-muted">
               <BFormInput v-model="form.sender_id" type="text" placeholder="e.g., system-billing"
                           class="custom-select2-input" required/>
             </BFormGroup>
           </BCol>
 
           <BCol md="6">
-            <BFormGroup label="Transport Provider:" class="small fw-semibold text-muted">
+            <BFormGroup label="Delivery profile:" class="small fw-semibold text-muted">
               <select v-model="form.transport" class="form-select custom-select2-input" required>
                 <option value="" disabled>Select Provider...</option>
-                <option v-for="t in dictionaries.transports" :key="t" :value="t">{{ t.toUpperCase() }}</option>
+                <option v-for="t in dictionaries.transports" :key="t.code" :value="t.code" :disabled="!t.available">{{ t.code }} ({{ t.provider }}){{ t.sender ? ': ' + t.sender : '' }}</option>
               </select>
             </BFormGroup>
           </BCol>
@@ -33,6 +33,7 @@
                   required
                   class="custom-select2"
               />
+              <small>SMS: international phone number, e.g. +79261234567. Email: user@example.com. Other channels use their provider's recipient format.</small>
             </BFormGroup>
           </BCol>
 
@@ -123,10 +124,10 @@
             <div v-else class="d-flex flex-column gap-2">
               <div v-for="(row, idx) in form.params" :key="idx" class="d-flex gap-2 align-items-center animate-row">
                 <BFormInput v-model="row.key" type="text" placeholder="Key (e.g., first_name)" size="sm"
-                            class="font-monospace form-control-sm" style="flex: 1;" required/>
+                            class="font-monospace form-control-sm" style="flex: 1;" :readonly="row.required" required/>
                 <BFormInput v-model="row.value" type="text" placeholder="Value (e.g., John)" size="sm"
                             class="form-control-sm" style="flex: 2;" required/>
-                <BButton type="button" variant="outline-danger" size="sm" class="px-2" @click="removeParamRow(idx)">
+                <BButton type="button" variant="outline-danger" size="sm" class="px-2" :disabled="row.required" @click="removeParamRow(idx)">
                   &times;
                 </BButton>
               </div>
@@ -228,9 +229,8 @@
 
 <script setup>
 import {computed, onMounted, reactive, ref} from 'vue'
-import {useRouter} from 'vue-router'
 import {messageService} from '@/api/message/message.service.js'
-import {workerService} from "@/api/worker/worker.service.js";
+import {templateRows, serializeParams} from '@/api/message/params.js'
 import {templateService} from "@/api/template/template.service.js";
 import Multiselect from '@vueform/multiselect'
 
@@ -242,7 +242,6 @@ import {yaml} from '@codemirror/lang-yaml'
 import '@vueform/multiselect/themes/default.css'
 import {backOffParams} from "@/dict/backoff.dict.js";
 
-const router = useRouter()
 const isSending = ref(false)
 
 const editorMode = ref('html')
@@ -284,7 +283,7 @@ const form = reactive({
   scheduleRaw: '',
   deadlineRaw: null,
   metaRaw: '{}',
-  params: {},
+  params: [],
   retry: {
     retries: 3,
     strategy: null,
@@ -334,7 +333,7 @@ function serializePayload() {
     body: form.body,
     recipients: form.recipients,
     meta: form.metaRaw.trim() ? JSON.parse(form.metaRaw) : {},
-    params: form.params,
+    params: serializeParams(form.params),
     deadline: new Date(form.deadlineRaw).toISOString(),
     schedule: form.scheduleRaw ? new Date(form.scheduleRaw).toISOString() : new Date().toISOString(),
     retry: {
@@ -353,11 +352,11 @@ async function submitMessage() {
     const finalPayload = serializePayload()
     let result = await messageService.sendNewMessage(finalPayload)
     if (result.message) {
-      alert('Message have been send. ID: ' + result.message.id);
+      alert('Message accepted into the queue. Delivery is not yet confirmed. ID: ' + result.message.id);
     }
     resetForm();
   } catch (err) {
-    alert('Execution rejection error payload response returned: ' + err.message)
+    alert('Request error: ' + err.message + '\nIf the request timed out, check message history before sending again. Acceptance may have succeeded.')
   } finally {
     isSending.value = false
   }
@@ -365,10 +364,10 @@ async function submitMessage() {
 
 async function loadDictionaries() {
   try {
-    const transports = await workerService.fetchWorkerStatuses()
+    const transports = await messageService.getTransports()
     const data = await templateService.getTemplates(1, 1_000_000);
     if (transports) {
-      transports.workers.forEach((item) => dictionaries.transports.push(item.name))
+      dictionaries.transports = transports
     }
     if (data) {
       dictionaries.templates = data.templates || []
@@ -382,20 +381,7 @@ const handleTemplateChange = (newKey) => {
   const targetKey = newKey?.target ? newKey.target.value : newKey;
   const templateDetails = dictionaries.templates[targetKey];
 
-  if (!templateDetails || !templateDetails.params) {
-    form.params = {};
-    return;
-  }
-  const newParams = {};
-
-  Object.entries(templateDetails.params).forEach(([key, item]) => {
-    newParams[key] = {
-      key: key,
-      value: item?.value || item?.default || ''
-    };
-  });
-
-  form.params = newParams;
+  form.params = templateRows(templateDetails?.params, form.params);
 };
 
 
