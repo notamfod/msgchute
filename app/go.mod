@@ -84,3 +84,5 @@ require (
 )
 
 replace github.com/devian2011/msgchute/pkg/helper => ./../pkg/
+
+replace github.com/devian2011/retrier => github.com/notamfod/retrier v1.2.1-0.20260910064435-72ffea120e6d

@@ -34,8 +34,6 @@ github.com/devian2011/msgchute/pkg/shared/auth v0.0.0-20260810114130-cd023e52c31
 github.com/devian2011/msgchute/pkg/shared/auth v0.0.0-20260810114130-cd023e52c314/go.mod h1:+Ly1ovVnrxw9tN7vqqgQLfeNf4OCtwK4q6X/XNTCILs=
 github.com/devian2011/msgchute/pkg/shared/provider v0.0.0-20260810114130-cd023e52c314 h1:kxm/enaZs86PWhZiBFy2ZQkuBwAQuPjlO2Io3kx26j8=
 github.com/devian2011/msgchute/pkg/shared/provider v0.0.0-20260810114130-cd023e52c314/go.mod h1:D60UYpT9Jz42rOFS9mm0KRYNhXZ3zUTKhdFue13khew=
-github.com/devian2011/retrier v1.2.0 h1:3EfniU/S1liDVx8oFDCuNP8D3mvIUTlliXCqnVe4p10=
-github.com/devian2011/retrier v1.2.0/go.mod h1:7IvcxVjAbF9RPvZuKV7SxNE9xxbRag6PF7qScj2sp4M=
 github.com/fatih/color v1.13.0/go.mod h1:kLAiJbzzSOZDVNGyDpeOxJ47H46qBXwg5ILebYFFOfk=
 github.com/fatih/color v1.17.0 h1:GlRw1BRJxkpqUCBKzKOw098ed57fEsKeNjpTe3cSjK4=
 github.com/fatih/color v1.17.0/go.mod h1:YZ7TlrGPkiz6ku9fK3TLD/pl3CpsiFyu8N92HLgmosI=
@@ -145,6 +143,8 @@ github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D
 github.com/mattn/go-sqlite3 v1.14.22/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
 github.com/mattn/go-sqlite3 v1.14.42 h1:MigqEP4ZmHw3aIdIT7T+9TLa90Z6smwcthx+Azv4Cgo=
 github.com/mattn/go-sqlite3 v1.14.42/go.mod h1:pjEuOr8IwzLJP2MfGeTb0A35jauH+C2kbHKBr7yXKVQ=
+github.com/notamfod/retrier v1.2.1-0.20260910064435-72ffea120e6d h1:uoUvwe7qXkHAQGKQOhjUtqbAukxi4hQJY8UfkdQ4JFM=
+github.com/notamfod/retrier v1.2.1-0.20260910064435-72ffea120e6d/go.mod h1:7IvcxVjAbF9RPvZuKV7SxNE9xxbRag6PF7qScj2sp4M=
 github.com/oklog/run v1.1.0 h1:GEenZ1cK0+q0+wsJew9qUg/DyD8k3JzYsZAi5gYi2mA=
 github.com/oklog/run v1.1.0/go.mod h1:sVPdnTZT1zYwAJeCMu2Th4T21pA3FPOQRfWjQlk7DVU=
 github.com/pkg/diff v0.0.0-20210226163009-20ebb0f2a09e/go.mod h1:pJLUxLENpZxwdsKMEsNbx1VGcRFpLqf3715MtcvvzbA=
