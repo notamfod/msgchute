@@ -9,6 +9,7 @@ import (
 	"github.com/devian2011/msgchute/internal/service/auth"
 	"github.com/devian2011/msgchute/internal/service/event"
 	"github.com/devian2011/msgchute/internal/service/sender"
+	"github.com/devian2011/msgchute/internal/service/template"
 )
 
 type AppRegistry struct {
@@ -39,11 +40,12 @@ type Handlers struct {
 }
 
 type PublicHandlers struct {
-	Transports  []sender.Transport
-	Sender      *public.SenderHandler
-	BatchSender *public.BatchSenderHandler
-	Retrier     *public.RetryHandler
-	Preview     *public.PreviewHandler
+	TemplateMetadata *template.Manager
+	Transports       []sender.Transport
+	Sender           *public.SenderHandler
+	BatchSender      *public.BatchSenderHandler
+	Retrier          *public.RetryHandler
+	Preview          *public.PreviewHandler
 }
 
 type AdminHandlers struct {

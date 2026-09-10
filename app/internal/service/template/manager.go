@@ -23,6 +23,7 @@ type templateRepo interface {
 	Find(ctx context.Context, filter *dto.MessageTemplateFilter) (map[string]*dto.Template, uint64, error)
 	Create(ctx context.Context, t *dto.Template) error
 	Update(ctx context.Context, t *dto.Template) error
+	UpdateMetadata(ctx context.Context, code string, metadata dto.TemplateMetadata) error
 }
 
 type Manager struct {
@@ -107,6 +108,13 @@ func (m *Manager) Update(tmpl *dto.Template) (*dto.Template, error) {
 		}
 		if existing == nil {
 			return fmt.Errorf("template with code: %s not found", tmpl.Code)
+		}
+		tmpl.Metadata = existing.Metadata
+		if tmpl.Systems == nil {
+			tmpl.Systems = existing.Systems
+		}
+		if tmpl.Channels == nil {
+			tmpl.Channels = existing.Channels
 		}
 
 		return m.repo.Update(ctx, tmpl)

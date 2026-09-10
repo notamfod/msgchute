@@ -28,8 +28,8 @@ func RegisterRoutes(s *web.Server, handlers *registry.Handlers, m *registry.Midd
 		middleware.ClientIPFromRemoteAddr,
 		cors.Handler(cors.Options{
 			AllowedOrigins:   []string{"*"},
-			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Token"},
+			AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Token", "X-Internal-Token"},
 			AllowCredentials: true,
 		}),
 		httplog.RequestLogger(
@@ -126,6 +126,7 @@ func managementAPI(r *chi.Mux, handlers *registry.Handlers) *chi.Mux {
 }
 
 func publicAPI(r *chi.Mux, handlers *registry.Handlers) *chi.Mux {
+	r.Method(http.MethodPatch, "/api/v1/templates/{code}/metadata", public.NewTemplateMetadataEndpoint(handlers.Public.TemplateMetadata))
 	r.Method(http.MethodGet, "/api/v1/transports", public.NewTransportsEndpoint(handlers.Public.Transports))
 	r.HandleFunc("/ping", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)

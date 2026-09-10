@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test src/api/message/params.test.js",
+    "test": "node --test src/api/message/params.test.js src/api/template/form.test.js",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"

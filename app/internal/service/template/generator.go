@@ -37,12 +37,16 @@ func (g *Generator) GenerateString(
 	messageParams map[string]*dto.MessageParam,
 	tmplParams map[string]*dto.TemplateParam,
 ) (string, error) {
+	params := g.buildParams(messageParams, tmplParams)
 	var missing []string
-	for name := range tmplParams {
-		param := messageParams[name]
-		if param == nil || param.Value == nil {
+	for name, definition := range tmplParams {
+		if definition != nil && definition.Required != nil && !*definition.Required {
+			continue
+		}
+		param := params[name]
+		if param == nil {
 			missing = append(missing, name)
-		} else if value, ok := param.Value.(string); ok && strings.TrimSpace(value) == "" {
+		} else if value, ok := param.(string); ok && strings.TrimSpace(value) == "" {
 			missing = append(missing, name)
 		}
 	}
@@ -55,7 +59,6 @@ func (g *Generator) GenerateString(
 		return "", err
 	}
 
-	params := g.buildParams(messageParams, tmplParams)
 	context := pongo2.Context(params)
 
 	result, err := pTmpl.Execute(context)
@@ -72,9 +75,9 @@ func (g *Generator) buildParams(
 ) map[string]interface{} {
 	result := make(map[string]interface{}, len(tmplParams))
 	for pName, pValue := range tmplParams {
-		if inPVal, exists := messageParams[pName]; exists {
+		if inPVal := messageParams[pName]; inPVal != nil && inPVal.Value != nil {
 			result[pName] = inPVal.Value
-		} else {
+		} else if pValue != nil {
 			result[pName] = pValue.Default
 		}
 	}

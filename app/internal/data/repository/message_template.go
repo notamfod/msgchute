@@ -37,9 +37,12 @@ func (r *MessageTemplateRepository) getDB(ctx context.Context) DBContext {
 }
 
 func (r *MessageTemplateRepository) Create(ctx context.Context, t *dto.Template) error {
+	if t.Metadata == nil {
+		t.Metadata = dto.TemplateMetadata{}
+	}
 	query, args, err := r.builder.Insert(messageTemplatesTable).
-		Columns("code", "name", "description", "params", "subject", "body").
-		Values(t.Code, t.Name, t.Description, t.Params, t.Subject, t.Body).
+		Columns("code", "name", "description", "params", "subject", "body", "metadata", "systems", "channels").
+		Values(t.Code, t.Name, t.Description, t.Params, t.Subject, t.Body, t.Metadata, t.Systems, t.Channels).
 		ToSql()
 	if err != nil {
 		return fmt.Errorf("build insert query: %w", err)
@@ -54,10 +57,10 @@ func (r *MessageTemplateRepository) Create(ctx context.Context, t *dto.Template)
 }
 
 func (r *MessageTemplateRepository) GetByCode(ctx context.Context, code string) (*dto.Template, error) {
-	query, args, err := r.builder.Select("code", "name", "description", "params", "subject", "body").
+	query, args, err := r.builder.Select("code", "name", "description", "params", "subject", "body", "metadata", "systems", "channels").
 		From(messageTemplatesTable).
 		Where(squirrel.Eq{"code": code}).
-		Suffix("FOR UPDATE SKIP LOCKED").
+		Suffix("FOR UPDATE").
 		ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("build get by code query: %w", err)
@@ -65,7 +68,7 @@ func (r *MessageTemplateRepository) GetByCode(ctx context.Context, code string) 
 
 	var t dto.Template
 	db := r.getDB(ctx)
-	if err := db.Get(&t, query, args...); err != nil {
+	if err := sqlx.GetContext(ctx, db, &t, query, args...); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
@@ -75,14 +78,20 @@ func (r *MessageTemplateRepository) GetByCode(ctx context.Context, code string) 
 }
 
 func (r *MessageTemplateRepository) Update(ctx context.Context, t *dto.Template) error {
-	query, args, err := r.builder.Update(messageTemplatesTable).
+	builder := r.builder.Update(messageTemplatesTable).
 		Set("name", t.Name).
 		Set("description", t.Description).
 		Set("params", t.Params).
 		Set("subject", t.Subject).
 		Set("body", t.Body).
-		Where(squirrel.Eq{"code": t.Code}).
-		ToSql()
+		Where(squirrel.Eq{"code": t.Code})
+	if t.Systems != nil {
+		builder = builder.Set("systems", t.Systems)
+	}
+	if t.Channels != nil {
+		builder = builder.Set("channels", t.Channels)
+	}
+	query, args, err := builder.ToSql()
 	if err != nil {
 		return fmt.Errorf("build update query: %w", err)
 	}
@@ -129,10 +138,24 @@ func (r *MessageTemplateRepository) Find(
 	ctx context.Context,
 	filter *dto.MessageTemplateFilter,
 ) (map[string]*dto.Template, uint64, error) {
-	selectBuilder := r.builder.Select("code", "name", "description", "params", "subject", "body").
+	selectBuilder := r.builder.Select("code", "name", "description", "params", "subject", "body", "metadata", "systems", "channels").
 		From(messageTemplatesTable)
 	countBuilder := r.builder.Select("COUNT(*)").
 		From(messageTemplatesTable)
+	for _, f := range []struct {
+		column string
+		values []string
+	}{{"systems", filter.Systems}, {"channels", filter.Channels}} {
+		if len(f.values) == 0 {
+			continue
+		}
+		conditions := squirrel.Or{}
+		for _, value := range f.values {
+			conditions = append(conditions, squirrel.Expr(f.column+" @> ?::jsonb", dto.TemplateLabels{value}))
+		}
+		selectBuilder = selectBuilder.Where(conditions)
+		countBuilder = countBuilder.Where(conditions)
+	}
 
 	if len(filter.Code) > 0 {
 		selectBuilder = selectBuilder.Where(squirrel.Eq{"code": filter.Code})
@@ -197,4 +220,9 @@ func (r *MessageTemplateRepository) Find(
 		result[t.Code] = t
 	}
 	return result, total, nil
+}
+
+func (r *MessageTemplateRepository) UpdateMetadata(ctx context.Context, code string, metadata dto.TemplateMetadata) error {
+	_, err := r.getDB(ctx).ExecContext(ctx, "UPDATE message_templates SET metadata = $1 WHERE code = $2", metadata, code)
+	return err
 }

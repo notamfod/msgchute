@@ -1,6 +1,7 @@
 package template
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/devian2011/msgchute/internal/dto"
@@ -36,7 +37,7 @@ func TestGenerator_GenerateString(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "Missing parameter is rejected even with default",
+			name: "Missing parameter uses default",
 			args: args{
 				tmpl:          "Hello, {{ name }}!",
 				messageParams: map[string]*dto.MessageParam{},
@@ -44,8 +45,8 @@ func TestGenerator_GenerateString(t *testing.T) {
 					"name": {Default: "Guest"},
 				},
 			},
-			want:    "",
-			wantErr: true,
+			want:    "Hello, Guest!",
+			wantErr: false,
 		},
 		{
 			name: "Success with uppercase filter",
@@ -129,8 +130,8 @@ func TestRequiredParameterValues(t *testing.T) {
 		param *dto.MessageParam
 		valid bool
 	}{
-		{"absent", nil, false},
-		{"null", &dto.MessageParam{}, false},
+		{"absent", nil, true},
+		{"null", &dto.MessageParam{}, true},
 		{"blank", &dto.MessageParam{Value: " \t"}, false},
 		{"zero", &dto.MessageParam{Value: 0}, true},
 		{"false", &dto.MessageParam{Value: false}, true},
@@ -143,6 +144,38 @@ func TestRequiredParameterValues(t *testing.T) {
 			_, err = g.GenerateString("{{ value }}", map[string]*dto.MessageParam{"value": tc.param}, map[string]*dto.TemplateParam{"value": {Default: "fallback"}})
 			if (err == nil) != tc.valid {
 				t.Fatalf("valid=%v, error=%v", tc.valid, err)
+			}
+		})
+	}
+}
+
+func TestParameterRequirements(t *testing.T) {
+	optional := false
+	required := true
+	for _, tc := range []struct {
+		name       string
+		definition *dto.TemplateParam
+		param      *dto.MessageParam
+		want       string
+		missing    bool
+	}{
+		{"legacy missing", &dto.TemplateParam{}, nil, "", true},
+		{"explicit required missing", &dto.TemplateParam{Required: &required}, nil, "", true},
+		{"optional missing", &dto.TemplateParam{Required: &optional}, nil, "", false},
+		{"optional blank", &dto.TemplateParam{Required: &optional, Default: "fallback"}, &dto.MessageParam{Value: ""}, "", false},
+		{"optional fallback", &dto.TemplateParam{Required: &optional, Default: "fallback"}, nil, "fallback", false},
+		{"nil definition missing", nil, nil, "", true},
+		{"nil definition supplied", nil, &dto.MessageParam{Value: "supplied"}, "supplied", false},
+		{"blank default", &dto.TemplateParam{Default: " \t"}, nil, "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g, err := NewGenerator()
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := g.GenerateString("{{ value }}", map[string]*dto.MessageParam{"value": tc.param}, map[string]*dto.TemplateParam{"value": tc.definition})
+			if errors.Is(err, ErrMissingParameters) != tc.missing || (!tc.missing && err != nil) || got != tc.want {
+				t.Fatalf("got %q, error %v; want %q, missing %v", got, err, tc.want, tc.missing)
 			}
 		})
 	}

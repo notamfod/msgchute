@@ -197,26 +197,41 @@ definitions:
     properties:
       body:
         type: string
+      channels:
+        items:
+          type: string
+        type: array
       code:
         type: string
       description:
         type: string
+      metadata:
+        $ref: '#/definitions/github_com_devian2011_msgchute_internal_dto.TemplateMetadata'
       name:
         type: string
       params:
         $ref: '#/definitions/github_com_devian2011_msgchute_internal_dto.TemplateParams'
       subject:
         type: string
+      systems:
+        items:
+          type: string
+        type: array
     required:
     - body
     - code
     - name
     - subject
     type: object
+  github_com_devian2011_msgchute_internal_dto.TemplateMetadata:
+    additionalProperties: {}
+    type: object
   github_com_devian2011_msgchute_internal_dto.TemplateParam:
     properties:
       default:
         type: string
+      required:
+        type: boolean
     type: object
   github_com_devian2011_msgchute_internal_dto.TemplateParams:
     additionalProperties:
@@ -550,6 +565,20 @@ paths:
         in: query
         name: search
         type: string
+      - collectionFormat: multi
+        description: System tags (match any)
+        in: query
+        items:
+          type: string
+        name: system
+        type: array
+      - collectionFormat: multi
+        description: Channel tags (match any)
+        in: query
+        items:
+          type: string
+        name: channel
+        type: array
       produces:
       - application/json
       responses:
@@ -763,6 +792,51 @@ paths:
       summary: Send message
       tags:
       - public.messages
+  /api/v1/templates/{code}/metadata:
+    patch:
+      consumes:
+      - application/json
+      description: Objects merge recursively, null deletes keys, arrays and scalars
+        replace values. No per-client ownership enforcement.
+      parameters:
+      - description: Stable template code
+        in: path
+        name: code
+        required: true
+        type: string
+      - description: Metadata merge patch, maximum 64 KiB
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_devian2011_msgchute_internal_dto.TemplateMetadata'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/github_com_devian2011_msgchute_internal_dto.TemplateMetadata'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response'
+      summary: Merge template metadata
+      tags:
+      - public.templates
   /api/v1/transports:
     get:
       description: Available means configured for acceptance, not remote provider

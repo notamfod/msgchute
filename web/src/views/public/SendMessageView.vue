@@ -124,10 +124,11 @@
             <div v-else class="d-flex flex-column gap-2">
               <div v-for="(row, idx) in form.params" :key="idx" class="d-flex gap-2 align-items-center animate-row">
                 <BFormInput v-model="row.key" type="text" placeholder="Key (e.g., first_name)" size="sm"
-                            class="font-monospace form-control-sm" style="flex: 1;" :readonly="row.required" required/>
+                            class="font-monospace form-control-sm" style="flex: 1;" :readonly="row.declared" required/>
                 <BFormInput v-model="row.value" type="text" placeholder="Value (e.g., John)" size="sm"
-                            class="form-control-sm" style="flex: 2;" required/>
-                <BButton type="button" variant="outline-danger" size="sm" class="px-2" :disabled="row.required" @click="removeParamRow(idx)">
+                            class="form-control-sm" style="flex: 2;" :required="row.required !== false"/>
+                <span class="small text-muted">{{ row.required === false ? 'Optional' : 'Required' }}</span>
+                <BButton type="button" variant="outline-danger" size="sm" class="px-2" :disabled="row.declared" @click="removeParamRow(idx)">
                   &times;
                 </BButton>
               </div>

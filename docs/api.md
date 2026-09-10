@@ -32,7 +32,9 @@ For SMS integrations, send international phone numbers such as `+79261234567` wi
 
 ### Template values and client workflow
 
-All parameters declared by a selected template must be supplied as `{ "name": { "value": ... } }`. Missing, null, empty or whitespace-only string values are rejected; zero and false are valid. Stored defaults do not fill omitted values. Templates with no parameters remain valid.
+Supply template values as `{ "name": { "value": ... } }`. A parameter is required unless its definition explicitly sets `required: false`. Missing or null input uses the stored string `default` before validation. An explicit empty or whitespace-only string does not use the default and is rejected for a required parameter; zero and false are valid. Optional parameters without a value or default render as empty text. Existing parameter definitions without `required` remain required. Templates with no parameters remain valid.
+
+Use `{{order_number}}` placeholders and declare `order_number` in `params`. Literal text such as `[address]` is not a placeholder and is not automatically converted.
 
 The client supplies values it knows and asks the user for the remaining required values. The service does not classify parameters as manual or automatic. A shared template works across systems when each can supply its declared fields; create a distinct template only when the actual content or required data differs.
 
@@ -56,6 +58,20 @@ HTTP 200 from send means accepted into the queue, not delivered. Save the return
 For status polling, read `GET /api/admin/v1/message/{id}` with authorized credentials. A client can poll every two seconds for up to one minute, with an individual request timeout, then stop and show the last known status with a manual refresh action. Stop earlier on `succeeded`, `failed`, or `declined`; `running` is not terminal. A delayed message may legitimately remain running until its schedule. Task statuses are separate: `pending`, `success`, `failure`; `is_processed` is a processing flag, not the delivery outcome.
 
 Polling timeout means the result is still unknown, not failed. Never automatically repeat send/retry on a timeout: the first request may have been accepted. If no ID was received, inspect message history before resubmitting. Provider success may mean provider acceptance rather than handset delivery, depending on the plugin.
+
+### Template metadata
+
+PATCH `/api/v1/templates/{code}/metadata`
+
+Authenticated integrations can attach their own JSON annotations to an existing template without changing its text or parameters. This endpoint accepts an object, merges nested objects, replaces arrays/scalars, and deletes keys whose patch value is `null`. Unmentioned keys are preserved. Concurrent patches on the same template are serialized; conflicting writes to the same key use the last committed value.
+
+```json
+{"1c":{"enabled":true,"parameter_sources":{"order_number":"document.number"}},"bitrix24":{"category":"orders"}}
+```
+
+For example, `{"1c":{"enabled":false,"parameter_sources":null}}` changes only those two fields and preserves `bitrix24`. The response uses the standard envelope with the resulting metadata as `data`. Both the request body and resulting metadata are limited to 64 KiB. Invalid JSON or a non-object root returns 400, a missing template returns 404, and an exceeded limit returns 413.
+
+Client section names are a convention, not an access-control boundary. Authorized callers can edit any section. The service stores these annotations and does not execute field mappings, determine client availability, or apply client business rules. Metadata is returned with templates from the existing admin catalog; that catalog still requires the configured admin/integration credentials.
 
 POST `/api/v1/send`
 
@@ -202,7 +218,7 @@ GET `/api/admin/v1/message/{id}`
 
 GET `/api/admin/v1/template`
 
-**List templates** — returns a paginated list of templates with filtering by code or full‑text search.
+**List templates** returns a paginated list with code, text, system and channel filters.
 
 #### Query Parameters
 
@@ -214,6 +230,10 @@ GET `/api/admin/v1/template`
 | `order` | string | Sort order (`asc` or `desc`) |
 | `code` | \[\]string | Filter by template codes (repeatable) |
 | `search` | string | Search phrase within template content |
+| `system` | string | Exact system tag, repeatable (match any) |
+| `channel` | string | Exact channel tag, repeatable (match any) |
+
+For example, `?system=1c&system=bitrix24&channel=sms` matches either system and the SMS channel. These optional tags describe intended use; they do not restrict sending or select a transport. Untagged templates remain visible without these filters.
 
 #### Responses
 
@@ -238,7 +258,10 @@ Object `Template`:
 | `description` | string | Description |
 | `subject` | string | Message subject (may contain placeholders) (required) |
 | `body` | string | Message body (may contain placeholders) (required) |
-| `params` | object | Expected parameters description (key → `TemplateParam` with `default` field) |
+| `params` | object | Parameter definitions, e.g. `{"order_number":{"required":true,"default":""}}` |
+| `metadata` | object | Initial client annotations; use PATCH for subsequent changes |
+| `systems` | []string | Optional system tags, e.g. `["1c","bitrix24"]` |
+| `channels` | []string | Optional channel tags, e.g. `["sms","email"]` |
 
 #### Responses
 
@@ -260,7 +283,7 @@ PUT `/api/admin/v1/template/{code}`
 
 #### Request Body (application/json)
 
-Object `Template` (same fields as creation).
+Object `Template` (same fields as creation). The path `code` is the stable identifier and cannot be renamed by changing the body. Omitted or null `systems`/`channels` preserve their stored values; an empty array clears them. `metadata` is ignored by PUT so older clients cannot erase another system's annotations; update it through PATCH instead.
 
 #### Responses
 
@@ -326,6 +349,9 @@ Message template. Defines code, name, description, subject, body, and expected p
 | `subject` | string | Subject template (required) |
 | `body` | string | Body template (required) |
 | `params` | object | Parameter definitions (key → `TemplateParam`) |
+| `metadata` | object | Client annotations, changed with the metadata PATCH endpoint |
+| `systems` | []string | System tags |
+| `channels` | []string | Channel tags |
 
 ### FullMessageInfo
 

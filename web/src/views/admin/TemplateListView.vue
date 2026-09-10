@@ -37,6 +37,16 @@
               />
             </BCol>
 
+            <BCol cols="12" md="4">
+              <BFormGroup label="Systems (comma separated)">
+                <BFormInput v-model="systemInputField" />
+              </BFormGroup>
+            </BCol>
+            <BCol cols="12" md="4">
+              <BFormGroup label="Channels (comma separated)">
+                <BFormInput v-model="channelInputField" />
+              </BFormGroup>
+            </BCol>
             <BCol cols="12" md="4" class="d-flex gap-2">
               <BButton type="submit" variant="primary" class="w-100">
                 Search
@@ -120,6 +130,16 @@
                         </BFormGroup>
                       </BCol>
 
+                      <BCol md="6">
+                        <BFormGroup label="Systems (comma separated)">
+                          <BFormInput v-model="editForm.systemsRaw" />
+                        </BFormGroup>
+                      </BCol>
+                      <BCol md="6">
+                        <BFormGroup label="Channels (comma separated)">
+                          <BFormInput v-model="editForm.channelsRaw" />
+                        </BFormGroup>
+                      </BCol>
                       <!-- TEMPLATE PARAMS INLINE CONFIGURATION -->
                       <BCol cols="12">
                         <span
@@ -151,10 +171,10 @@
                                   </BFormGroup>
                                 </BCol>
                                 <BCol cols="6">
-                                  <BFormGroup label='Value Configuration Structure Property {"value": "string"}'
+                                  <BFormGroup label="Default value (optional)"
                                               label-class="small text-muted font-monospace">
-                                    <BFormInput v-model="paramObj.default" placeholder="Enter configuration fallbacks"
-                                                required/>
+                                    <BFormInput v-model="paramObj.default" placeholder="Default value" />
+                                    <BFormCheckbox v-model="paramObj.required">Required</BFormCheckbox>
                                   </BFormGroup>
                                 </BCol>
                                 <BCol cols="2" class="text-end">
@@ -254,6 +274,12 @@
           </BCol>
 
           <BCol cols="12">
+            <BFormGroup label="Systems (comma separated)" class="mb-3">
+              <BFormInput v-model="createForm.systemsRaw" />
+            </BFormGroup>
+            <BFormGroup label="Channels (comma separated)" class="mb-3">
+              <BFormInput v-model="createForm.channelsRaw" />
+            </BFormGroup>
             <span class="fw-bold d-block mb-2">Template Map Keys Initialization</span>
 
             <div class="d-flex gap-2 mb-3">
@@ -277,8 +303,9 @@
                     </BFormGroup>
                   </BCol>
                   <BCol cols="6">
-                    <BFormGroup label='Value Assignment {"value": "string"}' label-class="small text-muted font-monospace">
-                      <BFormInput v-model="pObj.default" placeholder="Default structural value mapping payload" required />
+                    <BFormGroup label="Default value (optional)" label-class="small text-muted font-monospace">
+                      <BFormInput v-model="pObj.default" placeholder="Default value" />
+                      <BFormCheckbox v-model="pObj.required">Required</BFormCheckbox>
                     </BFormGroup>
                   </BCol>
                   <BCol cols="2" class="text-end">
@@ -337,6 +364,7 @@
 <script setup>
 import {computed, onMounted, reactive, ref} from 'vue';
 import {templateService} from '@/api/template/template.service.js';
+import {splitLabels, templatePayload} from '@/api/template/form.js';
 import {Codemirror} from "vue-codemirror";
 import {json} from "@codemirror/lang-json";
 import {yaml} from "@codemirror/lang-yaml";
@@ -349,18 +377,24 @@ const loading = ref(false);
 const saving = ref(false);
 const error = ref(null);
 const codeInputField = ref('');
+const systemInputField = ref('');
+const channelInputField = ref('');
 
 const filters = reactive({
   page: 1,
   per_page: 10,
   search: '',
   code: [],
+  system: [],
+  channel: [],
   sortField: '',
   sortOrder: 'asc'
 });
 
 const editingCode = ref(null);
 const editForm = reactive({
+  systemsRaw: '',
+  channelsRaw: '',
   code: '',
   name: '',
   description: '',
@@ -371,6 +405,8 @@ const editForm = reactive({
 
 const createModalOpen = ref(false);
 const createForm = reactive({
+  systemsRaw: '',
+  channelsRaw: '',
   code: '',
   name: '',
   description: '',
@@ -400,9 +436,9 @@ const editorPlaceholder = computed(() => {
 })
 
 const bodyJsonError = computed(() => {
-  if (editorMode.value !== 'json' || !form.body.trim()) return false
+  if (editorMode.value !== 'json' || !createForm.body.trim()) return false
   try {
-    JSON.parse(form.body)
+    JSON.parse(createForm.body)
     return false
   } catch {
     return true
@@ -452,15 +488,18 @@ const toggleEditForm = (template) => {
     editForm.description = template.description;
     editForm.subject = template.subject;
     editForm.body = template.body;
+    editForm.systemsRaw = (template.systems || []).join(', ');
+    editForm.channelsRaw = (template.channels || []).join(', ');
     newParamKeys.edit = ''; // clear any remaining input text
 
     const rawParams = template.params || {};
     const formattedParams = {};
     Object.keys(rawParams).forEach(k => {
       formattedParams[k] = {
+        required: rawParams[k]?.required !== false,
         default: typeof rawParams[k] === 'object' && rawParams[k] !== null
             ? (rawParams[k].default || '')
-            : String(rawParams[k])
+            : String(rawParams[k] ?? '')
       };
     });
     editForm.params = formattedParams;
@@ -480,12 +519,12 @@ const addNewParam = (targetForm) => {
 
   if (targetForm === 'edit') {
     if (!editForm.params[normalizedKey]) {
-      editForm.params[normalizedKey] = {default: ''};
+      editForm.params[normalizedKey] = {default: '', required: true};
     }
     newParamKeys.edit = ''; // Clear input buffer string on success
   } else {
     if (!createForm.params[normalizedKey]) {
-      createForm.params[normalizedKey] = {default: ''};
+      createForm.params[normalizedKey] = {default: '', required: true};
     }
     newParamKeys.create = ''; // Clear input buffer string on success
   }
@@ -503,7 +542,7 @@ const saveTemplate = async () => {
   saving.value = true;
   error.value = null;
   try {
-    await templateService.updateTemplate(editForm.code, {...editForm});
+    await templateService.updateTemplate(editForm.code, templatePayload(editForm));
     editingCode.value = null;
     await fetchTemplates();
   } catch (err) {
@@ -520,6 +559,8 @@ const openCreateModal = () => {
   createForm.subject = '';
   createForm.body = '';
   createForm.params = {};
+  createForm.systemsRaw = '';
+  createForm.channelsRaw = '';
   newParamKeys.create = ''; // clear input parameters buffer
   createModalOpen.value = true;
 };
@@ -528,7 +569,7 @@ const createTemplate = async () => {
   saving.value = true;
   error.value = null;
   try {
-    await templateService.createTemplate(createForm.code, {...createForm});
+    await templateService.createTemplate(createForm.code, templatePayload(createForm));
     createModalOpen.value = false;
     await fetchTemplates();
   } catch (err) {
@@ -539,7 +580,9 @@ const createTemplate = async () => {
 };
 
 const parseCodeInputField = () => {
-  filters.code = codeInputField.value ? codeInputField.value.split(',').filter(Boolean).map(c => c.trim()) : [];
+  filters.code = splitLabels(codeInputField.value);
+  filters.system = splitLabels(systemInputField.value);
+  filters.channel = splitLabels(channelInputField.value);
 };
 
 const handleCodeFilterChange = () => {
@@ -560,6 +603,8 @@ const clearFilters = () => {
   filters.sortField = '';
   filters.sortOrder = 'asc';
   codeInputField.value = '';
+  systemInputField.value = '';
+  channelInputField.value = '';
   forceSearch();
 };
 

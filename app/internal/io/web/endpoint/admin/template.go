@@ -21,8 +21,10 @@ type TemplateFinderResult struct {
 }
 
 type TemplateFilterRequest struct {
-	Code   []string `form:"code"`
-	Search *string  `form:"search"`
+	Systems  []string `form:"system"`
+	Channels []string `form:"channel"`
+	Code     []string `form:"code"`
+	Search   *string  `form:"search"`
 }
 
 type templateFinderHandler interface {
@@ -54,6 +56,8 @@ func NewTemplateFinderEndpoint(h templateFinderHandler) *TemplateFinderEndpoint 
 //	@Param			order		query		string					false	"Ascending or descending order selection (asc/desc)"
 //	@Param			code		query		[]string				false	"Filter metrics by unique message system code tokens"	collectionFormat(multi)
 //	@Param			search		query		string					false	"Generic phrase match expression matching structural text"
+// @Param system query []string false "System tags (match any)" collectionFormat(multi)
+// @Param channel query []string false "Channel tags (match any)" collectionFormat(multi)
 //	@Success		200			{object}	TemplateFinderResult	"Key-value dictionary mapping matching code IDs to schema definitions"
 //	@Failure		400			{object}	response.Response		"Query validation or structured query parameter parse errors"
 //	@Failure		500			{object}	response.Response		"Internal catalog resolution context errors"
@@ -82,6 +86,8 @@ func (e *TemplateFinderEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	}
 
 	filter.Code = filterRequest.Code
+	filter.Systems = filterRequest.Systems
+	filter.Channels = filterRequest.Channels
 	filter.Search = filterRequest.Search
 
 	templates, totalCnt, getErr := e.h.Handle(filter)

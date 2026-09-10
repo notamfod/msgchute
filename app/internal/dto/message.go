@@ -164,6 +164,8 @@ func (r *Retry) Scan(value interface{}) error {
 
 // MessageTemplateFilter defines evaluation criteria for advanced template querying, pagination, and sorting.
 type MessageTemplateFilter struct {
+	Systems   []string
+	Channels  []string
 	Limit     uint64
 	Offset    uint64
 	Code      []string
@@ -174,6 +176,9 @@ type MessageTemplateFilter struct {
 
 // Template establishes baseline layouts, mandatory properties, and default retry bounds for structural content generation.
 type Template struct {
+	Metadata    TemplateMetadata `json:"metadata" db:"metadata"`
+	Systems     TemplateLabels   `json:"systems,omitempty" db:"systems"`
+	Channels    TemplateLabels   `json:"channels,omitempty" db:"channels"`
 	Code        string         `json:"code" db:"code" validate:"required"`
 	Name        string         `json:"name" db:"name" validate:"required"`
 	Description string         `json:"description" db:"description"`
@@ -185,6 +190,7 @@ type Template struct {
 // TemplateParam handles structural fallback expectations when explicit variables remain unassigned.
 type TemplateParam struct {
 	Default string `json:"default"`
+	Required *bool `json:"required,omitempty"`
 }
 
 // TemplateParams lists baseline injection requirements needed to synthesize functional notifications.

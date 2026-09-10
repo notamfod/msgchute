@@ -19,6 +19,10 @@ type MockRepo struct {
 	mock.Mock
 }
 
+func (m *MockRepo) UpdateMetadata(ctx context.Context, code string, metadata dto.TemplateMetadata) error {
+	return m.Called(ctx, code, metadata).Error(0)
+}
+
 func (m *MockRepo) GetByCode(ctx context.Context, code string) (*dto.Template, error) {
 	args := m.Called(ctx, code)
 	if args.Get(0) == nil {
@@ -244,11 +248,11 @@ func TestManager_Update(t *testing.T) {
 	gen := new(MockStringGenerator)
 	mgr := NewManager(sqlxDB, gen, repo)
 
-	tmpl := &dto.Template{Code: "existing_template"}
+	tmpl := &dto.Template{Code: "existing_template", Metadata: dto.TemplateMetadata{"ignored": true}}
 
 	t.Run("success", func(t *testing.T) {
 		sqlMock.ExpectBegin()
-		existing := &dto.Template{Code: "existing_template"}
+		existing := &dto.Template{Code: "existing_template", Metadata: dto.TemplateMetadata{"1c": true}, Systems: dto.TemplateLabels{"1c"}, Channels: dto.TemplateLabels{"sms"}}
 		repo.On("GetByCode", mock.Anything, "existing_template").Return(existing, nil).Once()
 		repo.On("Update", mock.Anything, tmpl).Return(nil).Once()
 		sqlMock.ExpectCommit()
@@ -256,6 +260,9 @@ func TestManager_Update(t *testing.T) {
 		updated, err := mgr.Update(tmpl)
 		assert.NoError(t, err)
 		assert.Equal(t, tmpl, updated)
+		assert.Equal(t, existing.Metadata, updated.Metadata)
+		assert.Equal(t, existing.Systems, updated.Systems)
+		assert.Equal(t, existing.Channels, updated.Channels)
 		repo.AssertExpectations(t)
 		assert.NoError(t, sqlMock.ExpectationsWereMet())
 	})

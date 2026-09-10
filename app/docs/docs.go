@@ -307,6 +307,26 @@ const docTemplate = `{
                         "description": "Generic phrase match expression matching structural text",
                         "name": "search",
                         "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "System tags (match any)",
+                        "name": "system",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "Channel tags (match any)",
+                        "name": "channel",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -611,6 +631,77 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal server error during processing or delivery dispatch",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/templates/{code}/metadata": {
+            "patch": {
+                "description": "Objects merge recursively, null deletes keys, arrays and scalars replace values. No per-client ownership enforcement.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public.templates"
+                ],
+                "summary": "Merge template metadata",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Stable template code",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Metadata merge patch, maximum 64 KiB",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_devian2011_msgchute_internal_dto.TemplateMetadata"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/github_com_devian2011_msgchute_internal_dto.TemplateMetadata"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response"
+                        }
+                    },
+                    "413": {
+                        "description": "Request Entity Too Large",
                         "schema": {
                             "$ref": "#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response"
                         }
@@ -959,11 +1050,20 @@ const docTemplate = `{
                 "body": {
                     "type": "string"
                 },
+                "channels": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "code": {
                     "type": "string"
                 },
                 "description": {
                     "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/github_com_devian2011_msgchute_internal_dto.TemplateMetadata"
                 },
                 "name": {
                     "type": "string"
@@ -973,14 +1073,27 @@ const docTemplate = `{
                 },
                 "subject": {
                     "type": "string"
+                },
+                "systems": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
+        },
+        "github_com_devian2011_msgchute_internal_dto.TemplateMetadata": {
+            "type": "object",
+            "additionalProperties": {}
         },
         "github_com_devian2011_msgchute_internal_dto.TemplateParam": {
             "type": "object",
             "properties": {
                 "default": {
                     "type": "string"
+                },
+                "required": {
+                    "type": "boolean"
                 }
             }
         },
