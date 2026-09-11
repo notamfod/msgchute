@@ -1,7 +1,7 @@
 export function templateRows(params = {}, previous = []) {
     const values = new Map(previous.map(row => [row.key, row.value]));
     return Object.entries(params ?? {}).map(([key, param]) => ({
-        key, value: values.get(key) ?? param?.default ?? '', required: param?.required !== false, declared: true,
+        key, value: values.get(key) ?? param?.default ?? '', required: param?.required === true, declared: true,
     }));
 }
 

@@ -125,6 +125,7 @@ func TestGenerator_buildParams(t *testing.T) {
 }
 
 func TestRequiredParameterValues(t *testing.T) {
+	required := true
 	for _, tc := range []struct {
 		name  string
 		param *dto.MessageParam
@@ -141,7 +142,7 @@ func TestRequiredParameterValues(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = g.GenerateString("{{ value }}", map[string]*dto.MessageParam{"value": tc.param}, map[string]*dto.TemplateParam{"value": {Default: "fallback"}})
+			_, err = g.GenerateString("{{ value }}", map[string]*dto.MessageParam{"value": tc.param}, map[string]*dto.TemplateParam{"value": {Default: "fallback", Required: &required}})
 			if (err == nil) != tc.valid {
 				t.Fatalf("valid=%v, error=%v", tc.valid, err)
 			}
@@ -159,14 +160,16 @@ func TestParameterRequirements(t *testing.T) {
 		want       string
 		missing    bool
 	}{
-		{"legacy missing", &dto.TemplateParam{}, nil, "", true},
+		{"legacy missing", &dto.TemplateParam{}, nil, "", false},
+		{"legacy blank default", &dto.TemplateParam{Default: " "}, nil, " ", false},
+		{"legacy explicit blank", &dto.TemplateParam{Default: "fallback"}, &dto.MessageParam{Value: ""}, "", false},
 		{"explicit required missing", &dto.TemplateParam{Required: &required}, nil, "", true},
 		{"optional missing", &dto.TemplateParam{Required: &optional}, nil, "", false},
 		{"optional blank", &dto.TemplateParam{Required: &optional, Default: "fallback"}, &dto.MessageParam{Value: ""}, "", false},
 		{"optional fallback", &dto.TemplateParam{Required: &optional, Default: "fallback"}, nil, "fallback", false},
-		{"nil definition missing", nil, nil, "", true},
+		{"nil definition missing", nil, nil, "", false},
 		{"nil definition supplied", nil, &dto.MessageParam{Value: "supplied"}, "supplied", false},
-		{"blank default", &dto.TemplateParam{Default: " \t"}, nil, "", true},
+		{"required blank default", &dto.TemplateParam{Default: " \t", Required: &required}, nil, "", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			g, err := NewGenerator()

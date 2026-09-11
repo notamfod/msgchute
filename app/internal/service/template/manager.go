@@ -116,6 +116,18 @@ func (m *Manager) Update(tmpl *dto.Template) (*dto.Template, error) {
 		if tmpl.Channels == nil {
 			tmpl.Channels = existing.Channels
 		}
+		// Older clients do not send required when replacing parameter definitions.
+		for name, param := range tmpl.Params {
+			previous := existing.Params[name]
+			if previous == nil || previous.Required == nil || (param != nil && param.Required != nil) {
+				continue
+			}
+			if param == nil {
+				param = &dto.TemplateParam{}
+				tmpl.Params[name] = param
+			}
+			param.Required = previous.Required
+		}
 
 		return m.repo.Update(ctx, tmpl)
 	})

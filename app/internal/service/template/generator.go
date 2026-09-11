@@ -40,7 +40,8 @@ func (g *Generator) GenerateString(
 	params := g.buildParams(messageParams, tmplParams)
 	var missing []string
 	for name, definition := range tmplParams {
-		if definition != nil && definition.Required != nil && !*definition.Required {
+		// Templates predating required retain their permissive default handling.
+		if definition == nil || definition.Required == nil || !*definition.Required {
 			continue
 		}
 		param := params[name]

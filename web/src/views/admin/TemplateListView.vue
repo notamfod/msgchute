@@ -496,7 +496,7 @@ const toggleEditForm = (template) => {
     const formattedParams = {};
     Object.keys(rawParams).forEach(k => {
       formattedParams[k] = {
-        required: rawParams[k]?.required !== false,
+        required: rawParams[k]?.required === true,
         default: typeof rawParams[k] === 'object' && rawParams[k] !== null
             ? (rawParams[k].default || '')
             : String(rawParams[k] ?? '')

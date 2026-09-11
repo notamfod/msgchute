@@ -295,3 +295,49 @@ func TestManager_Update(t *testing.T) {
 		assert.NoError(t, sqlMock.ExpectationsWereMet())
 	})
 }
+
+func TestManager_UpdatePreservesParameterRequirements(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		existing *dto.TemplateParam
+		incoming *dto.TemplateParam
+		want     *bool
+	}{
+		{"legacy PUT preserves optional", &dto.TemplateParam{Required: helper.Ptr(false)}, &dto.TemplateParam{Default: "new"}, helper.Ptr(false)},
+		{"legacy PUT preserves required", &dto.TemplateParam{Required: helper.Ptr(true)}, &dto.TemplateParam{Default: "new"}, helper.Ptr(true)},
+		{"null definition preserves required", &dto.TemplateParam{Required: helper.Ptr(true)}, nil, helper.Ptr(true)},
+		{"explicit false overrides true", &dto.TemplateParam{Required: helper.Ptr(true)}, &dto.TemplateParam{Required: helper.Ptr(false)}, helper.Ptr(false)},
+		{"explicit true overrides false", &dto.TemplateParam{Required: helper.Ptr(false)}, &dto.TemplateParam{Required: helper.Ptr(true)}, helper.Ptr(true)},
+		{"legacy remains legacy", &dto.TemplateParam{}, &dto.TemplateParam{}, nil},
+		{"new parameter remains legacy", nil, &dto.TemplateParam{}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, sqlMock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+			repo := new(MockRepo)
+			mgr := NewManager(sqlx.NewDb(db, "postgres"), &MockStringGenerator{}, repo)
+			existing := &dto.Template{Code: "contacts", Params: dto.TemplateParams{
+				"email": tc.existing, "removed": {Required: helper.Ptr(true)},
+			}}
+			incoming := &dto.Template{Code: "contacts", Params: dto.TemplateParams{"email": tc.incoming}}
+			sqlMock.ExpectBegin()
+			repo.On("GetByCode", mock.Anything, "contacts").Return(existing, nil).Once()
+			repo.On("Update", mock.Anything, mock.MatchedBy(func(value *dto.Template) bool {
+				assert.NotContains(t, value.Params, "removed")
+				require.NotNil(t, value.Params["email"])
+				assert.Equal(t, tc.want, value.Params["email"].Required)
+				if tc.incoming != nil {
+					assert.Equal(t, tc.incoming.Default, value.Params["email"].Default)
+				}
+				return true
+			})).Return(nil).Once()
+			sqlMock.ExpectCommit()
+			updated, err := mgr.Update(incoming)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, updated.Params["email"].Required)
+			repo.AssertExpectations(t)
+			require.NoError(t, sqlMock.ExpectationsWereMet())
+		})
+	}
+}
