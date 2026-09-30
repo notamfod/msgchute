@@ -17,6 +17,7 @@
           >
             <BDropdownItem to="/admin/messages">Messages</BDropdownItem>
             <BDropdownItem to="/admin/templates">Templates</BDropdownItem>
+            <BDropdownItem to="/admin/subscriptions">Подписки</BDropdownItem>
             <BDropdownItem to="/admin/worker/statuses">Worker Statuses</BDropdownItem>
           </BNavItemDropdown>
 

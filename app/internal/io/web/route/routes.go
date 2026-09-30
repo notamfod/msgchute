@@ -84,6 +84,12 @@ func RegisterRoutes(s *web.Server, handlers *registry.Handlers, m *registry.Midd
 }
 
 func managementAPI(r *chi.Mux, handlers *registry.Handlers) *chi.Mux {
+	stopList := admin.NewStopListEndpoint(handlers.Admin.StopList)
+	r.Method(http.MethodGet, "/api/admin/v1/stop-list", http.HandlerFunc(stopList.List))
+	r.Method(http.MethodPost, "/api/admin/v1/stop-list", http.HandlerFunc(stopList.Create))
+	r.Method(http.MethodDelete, "/api/admin/v1/stop-list/{id}", http.HandlerFunc(stopList.Delete))
+	r.Method(http.MethodGet, "/api/admin/v1/subscriptions", http.HandlerFunc(stopList.Subscriptions))
+	r.Method(http.MethodPut, "/api/admin/v1/subscriptions", http.HandlerFunc(stopList.PutSubscription))
 	r.Method(
 		http.MethodGet,
 		"/api/admin/v1/template",

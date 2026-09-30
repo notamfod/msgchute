@@ -9,6 +9,14 @@ Authentication is determined by the configured auth plugin. Use the header and t
 
 - - -
 
+## Stop list
+
+`GET /api/admin/v1/stop-list` lists only full opt-outs. `POST /api/admin/v1/stop-list` accepts `{"kind":"email"|"phone","recipient":"...","reason":"..."}` and enables a full opt-out. If a saved preference row exists, it preserves that row's subscriptions; an already blocked recipient returns `409`. `DELETE /api/admin/v1/stop-list/{id}` clears the full opt-out and preserves preferences.
+
+`GET /api/admin/v1/subscriptions` lists every preference row and accepts `search`, `page` (default `1`), and `per_page` (default `20`, maximum `100`). `PUT /api/admin/v1/subscriptions` upserts `{"kind":"email"|"phone","recipient":"...","subscriptions":[...],"blocked_all":false,"reason":"..."}`. `subscriptions` and `blocked_all` are required, and `subscriptions: []` persists no tagged subscriptions. Email accepts `email.order`, `email.promotion`, and `email.news`; phone accepts the `sms.*` and `whatsapp.*` equivalents. When no preference row exists, implicit delivery defaults are email order and SMS order; the UI supplies these when it creates a row. Preferences use normalized email addresses or phone numbers, not external contact IDs.
+
+Emails are lower-cased after address parsing. Phones store as E.164-style `+` plus country code and digits. Russian bare `8XXXXXXXXXX` stores as `+7XXXXXXXXXX`; bare `8` delivery checks both its Russian `+7` form and raw `+8` form. The sender checks preferences immediately before every provider call, including queued work, retries, and batches. The optional message-payload `tag` is `order`, `promotion`, or `news`; omitting it keeps legacy full-opt-out behavior. Tagged messages use `providers.providers.<transport>.channel`: SMTP defaults to `email`, smsc/beeline to `sms`, and the built-in WhatsApp provider to `whatsapp`; custom providers need an explicit `email`, `sms`, or `whatsapp` channel. SMTP `To`, `cc`, and `bcc` are checked. A database lookup failure is retryable and no provider call is made. Rolling down the migration removes saved preferences, so unblocked preference rows become legacy full opt-outs.
+
 ## 📬 Public Endpoints
 
 GET `/api/v1/transports`

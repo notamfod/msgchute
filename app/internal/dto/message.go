@@ -54,6 +54,7 @@ type Message struct {
 	Code       *string       `json:"code,omitempty" db:"code"`                     // Code template code
 	Params     MessageParams `json:"params,omitempty" db:"params"`                 // Params message params for generate templates
 	Transport  string        `json:"transport" db:"transport" validate:"required"` // Transport message provider
+	Tag        string        `json:"tag,omitempty" db:"tag"`
 	Subject    string        `json:"subject" db:"subject"`
 	Body       string        `json:"body" db:"body"`
 	Deadline   time.Time     `json:"deadline" db:"deadline"`

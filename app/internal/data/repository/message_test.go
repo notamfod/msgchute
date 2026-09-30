@@ -41,13 +41,13 @@ func TestMessageRepository_Create(t *testing.T) {
 		Body:       "Code: 1234",
 	}
 
-	expectedSQL := "INSERT INTO messages (id,sender_id,transport,template_code,recipients,params,retry,schedule,deadline,subject,body,status,meta) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)"
+	expectedSQL := "INSERT INTO messages (id,sender_id,transport,template_code,recipients,params,retry,schedule,deadline,subject,body,status,meta,tag) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)"
 
 	mock.ExpectExec(expectedSQL).
 		WithArgs(
 			msg.ID, msg.SenderID, msg.Transport, msg.Code,
 			msg.Recipients, msg.Params, msg.Retry, msg.Schedule,
-			msg.Deadline, msg.Subject, msg.Body, msg.Status, msg.Meta,
+			msg.Deadline, msg.Subject, msg.Body, msg.Status, msg.Meta, msg.Tag,
 		).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -89,7 +89,7 @@ func TestMessageRepository_Find(t *testing.T) {
 			WithArgs("billing", "invoice_remind", "email", dto.MessageStatusSucceeded, `["user@example.com"]`).
 			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 
-		expectedSelectSQL := "SELECT id, sender_id, transport, template_code AS code, recipients, params, retry, schedule, deadline, subject, body, status, meta FROM messages WHERE sender_id IN ($1) AND template_code IN ($2) AND transport IN ($3) AND status IN ($4) AND recipients @> $5 ORDER BY schedule DESC LIMIT 10 FOR UPDATE SKIP LOCKED"
+		expectedSelectSQL := "SELECT id, sender_id, transport, template_code AS code, recipients, params, retry, schedule, deadline, subject, body, status, meta, tag FROM messages WHERE sender_id IN ($1) AND template_code IN ($2) AND transport IN ($3) AND status IN ($4) AND recipients @> $5 ORDER BY schedule DESC LIMIT 10 FOR UPDATE SKIP LOCKED"
 		rows := sqlmock.NewRows([]string{
 			"id", "sender_id", "transport", "code",
 			"recipients", "params", "retry", "schedule",
@@ -122,7 +122,7 @@ func TestMessageRepository_Find(t *testing.T) {
 		mock.ExpectQuery("SELECT COUNT(*) FROM messages").
 			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 
-		expectedSelectSQL := "SELECT id, sender_id, transport, template_code AS code, recipients, params, retry, schedule, deadline, subject, body, status, meta FROM messages ORDER BY schedule DESC, id DESC LIMIT 5 FOR UPDATE SKIP LOCKED"
+		expectedSelectSQL := "SELECT id, sender_id, transport, template_code AS code, recipients, params, retry, schedule, deadline, subject, body, status, meta, tag FROM messages ORDER BY schedule DESC, id DESC LIMIT 5 FOR UPDATE SKIP LOCKED"
 		mock.ExpectQuery(expectedSelectSQL).
 			WillReturnRows(sqlmock.NewRows([]string{
 				"id", "sender_id", "transport", "code",
@@ -162,10 +162,10 @@ func TestMessageRepository_CreateWithTransaction(t *testing.T) {
 		Schedule:  time.Time{},
 	}
 
-	expectedSQL := "INSERT INTO messages (id,sender_id,transport,template_code,recipients,params,retry,schedule,deadline,subject,body,status,meta) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)"
+	expectedSQL := "INSERT INTO messages (id,sender_id,transport,template_code,recipients,params,retry,schedule,deadline,subject,body,status,meta,tag) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)"
 
 	mock.ExpectExec(expectedSQL).
-		WithArgs(msg.ID, msg.SenderID, msg.Transport, msg.Code, msg.Recipients, msg.Params, msg.Retry, msg.Schedule, msg.Deadline, msg.Subject, msg.Body, msg.Status, msg.Meta).
+		WithArgs(msg.ID, msg.SenderID, msg.Transport, msg.Code, msg.Recipients, msg.Params, msg.Retry, msg.Schedule, msg.Deadline, msg.Subject, msg.Body, msg.Status, msg.Meta, msg.Tag).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	err = repo.Create(ctxWithTx, msg)
@@ -185,7 +185,7 @@ func TestGetByID_Success(t *testing.T) {
 	ctx := context.Background()
 	id := uuid.MustParse("123e4567-e89b-12d3-a456-426614174000")
 
-	expectedQuery := `SELECT id, sender_id, transport, template_code AS code, recipients, params, retry, schedule, deadline, subject, body, status, meta FROM messages WHERE id = $1 FOR UPDATE SKIP LOCKED`
+	expectedQuery := `SELECT id, sender_id, transport, template_code AS code, recipients, params, retry, schedule, deadline, subject, body, status, meta, tag FROM messages WHERE id = $1 FOR UPDATE SKIP LOCKED`
 
 	deadline := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
 	schedule := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -233,7 +233,7 @@ func TestGetByID_NotFound(t *testing.T) {
 	ctx := context.Background()
 	id := uuid.MustParse("123e4567-e89b-12d3-a456-426614174000")
 
-	expectedSQL := "SELECT id, sender_id, transport, template_code AS code, recipients, params, retry, schedule, deadline, subject, body, status, meta FROM messages WHERE id = $1 FOR UPDATE SKIP LOCKED"
+	expectedSQL := "SELECT id, sender_id, transport, template_code AS code, recipients, params, retry, schedule, deadline, subject, body, status, meta, tag FROM messages WHERE id = $1 FOR UPDATE SKIP LOCKED"
 	mock.ExpectQuery(expectedSQL).
 		WithArgs(id.String()).
 		WillReturnError(sql.ErrNoRows)
@@ -252,7 +252,7 @@ func TestGetByIDs_Success(t *testing.T) {
 	repo := NewMessageRepository(db)
 	ctx := context.Background()
 
-	expectedQuery := `SELECT id, sender_id, transport, template_code AS code, recipients, params, retry, schedule, deadline, subject, body, status, meta FROM messages WHERE id IN ($1,$2)`
+	expectedQuery := `SELECT id, sender_id, transport, template_code AS code, recipients, params, retry, schedule, deadline, subject, body, status, meta, tag FROM messages WHERE id IN ($1,$2)`
 
 	id1 := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 	id2 := uuid.MustParse("22222222-2222-2222-2222-222222222222")
@@ -336,7 +336,7 @@ func TestGetByIDs_DBError(t *testing.T) {
 	testUUID := uuid.MustParse("123e4567-e89b-12d3-a456-426614174000")
 	ids := []uuid.UUID{testUUID}
 
-	expectedSQL := "SELECT id, sender_id, transport, template_code AS code, recipients, params, retry, schedule, deadline, subject, body, status, meta FROM messages WHERE id IN ($1)"
+	expectedSQL := "SELECT id, sender_id, transport, template_code AS code, recipients, params, retry, schedule, deadline, subject, body, status, meta, tag FROM messages WHERE id IN ($1)"
 	mock.ExpectQuery(expectedSQL).
 		WithArgs(testUUID.String()).
 		WillReturnError(fmt.Errorf("connection refused"))

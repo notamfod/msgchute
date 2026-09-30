@@ -16,6 +16,7 @@ import (
 	"github.com/devian2011/msgchute/internal/service/event"
 	"github.com/devian2011/msgchute/internal/service/message"
 	"github.com/devian2011/msgchute/internal/service/sender"
+	"github.com/devian2011/msgchute/internal/service/stoplist"
 	"github.com/devian2011/msgchute/internal/service/template"
 )
 
@@ -39,6 +40,8 @@ func Bootstrap(ctx context.Context, cfgFilePath string) (*registry.AppRegistry, 
 	msgTemplateRepo := repository.NewMessageTemplateRepository(db)
 	taskRepo := repository.NewTaskRepository(db)
 	taskResultRepo := repository.NewTaskResultRepository(db)
+	stopListRepo := repository.NewStopListRepository(db)
+	stopListService := stoplist.New(stopListRepo)
 
 	// Auth block
 	authProvider, authMiddleware, authProviderErr := initAuth(ctx, cfg.Auth)
@@ -73,7 +76,7 @@ func Bootstrap(ctx context.Context, cfgFilePath string) (*registry.AppRegistry, 
 	msgFinder := message.NewFinder(db, msgRepo, taskRepo, taskResultRepo)
 
 	// msgSender
-	msgSender := sender.NewSender(ctx, cfg.Providers, providerManager, workerManager, tmplMgr)
+	msgSender := sender.NewSender(ctx, cfg.Providers, providerManager, workerManager, tmplMgr, stopListService)
 	msgQueue := sender.NewQueue(ctx, db, taskRepo, msgRepo, cfg.Providers.Providers, tmplMgr)
 
 	return &registry.AppRegistry{
@@ -98,6 +101,7 @@ func Bootstrap(ctx context.Context, cfgFilePath string) (*registry.AppRegistry, 
 				Retrier:          public.NewMessageRetryHandler(msgQueue),
 			},
 			Admin: &registry.AdminHandlers{
+				StopList:        stopListService,
 				TemplateCreator: admin.NewTemplateCreateHandler(tmplMgr),
 				TemplateUpdater: admin.NewTemplateUpdateHandler(tmplMgr),
 				TemplateFinder:  admin.NewTemplateFinderHandler(tmplMgr),

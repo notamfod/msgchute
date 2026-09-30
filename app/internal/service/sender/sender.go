@@ -2,13 +2,17 @@ package sender
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/bytedance/sonic"
 	"github.com/devian2011/retrier"
 
 	"github.com/devian2011/msgchute/internal/dto"
+	"github.com/devian2011/msgchute/internal/service/stoplist"
 	"github.com/devian2011/msgchute/pkg/shared/provider"
 )
 
@@ -34,7 +38,10 @@ type Sender struct {
 	pm            pm
 	wm            wm
 	tmplGenerator TemplateGenerator
+	stopList      *stoplist.Service
 }
+
+var errMalformedSMTPRecipients = errors.New("invalid SMTP recipients")
 
 func NewSender(
 	ctx context.Context,
@@ -42,6 +49,7 @@ func NewSender(
 	pm pm,
 	wm wm,
 	tmplGenerator TemplateGenerator,
+	stopList *stoplist.Service,
 ) *Sender {
 	return &Sender{
 		ctx:           ctx,
@@ -49,6 +57,7 @@ func NewSender(
 		pm:            pm,
 		wm:            wm,
 		tmplGenerator: tmplGenerator,
+		stopList:      stopList,
 	}
 }
 
@@ -92,7 +101,7 @@ func (s *Sender) Init() error {
 	return nil
 }
 
-func (s *Sender) sendFunc(_ context.Context, payload []byte) (string, *retrier.ExecutionError) {
+func (s *Sender) sendFunc(ctx context.Context, payload []byte) (string, *retrier.ExecutionError) {
 	var msg dto.Message
 	getMsgErr := sonic.Unmarshal(payload, &msg)
 	if getMsgErr != nil {
@@ -100,6 +109,14 @@ func (s *Sender) sendFunc(_ context.Context, payload []byte) (string, *retrier.E
 			Err: fmt.Errorf("error unmarshal message task payload: %s, err: %v",
 				string(payload), getMsgErr),
 			State: retrier.CriticalState,
+		}
+	}
+	if msg.Tag != "" && !ValidTag(msg.Tag) {
+		return "", &retrier.ExecutionError{Err: ErrInvalidTag, State: retrier.CriticalState}
+	}
+	if msg.Tag != "" {
+		if _, err := s.channel(msg.Transport); err != nil {
+			return "", &retrier.ExecutionError{Err: err, State: retrier.CriticalState}
 		}
 	}
 
@@ -121,10 +138,22 @@ func (s *Sender) sendFunc(_ context.Context, payload []byte) (string, *retrier.E
 		}
 	}
 
-	msgParams, _ := sonic.Marshal(msg.Meta)
+	recipients, meta, allowedCount, filterErr := s.filterRecipients(ctx, &msg)
+	if filterErr != nil {
+		state := retrier.UsualState
+		if errors.Is(filterErr, errMalformedSMTPRecipients) || errors.Is(filterErr, stoplist.ErrInvalidRecipient) || errors.Is(filterErr, stoplist.ErrInvalidEntry) {
+			state = retrier.CriticalState
+		}
+		return "", &retrier.ExecutionError{Err: filterErr, State: state}
+	}
+	if allowedCount == 0 {
+		return "", &retrier.ExecutionError{Err: fmt.Errorf("all recipients blocked by stop list or subscription preferences"), State: retrier.CriticalState}
+	}
+
+	msgParams, _ := sonic.Marshal(meta)
 
 	result := prv.Send(&provider.Message{
-		To:      msg.Recipients,
+		To:      recipients,
 		Params:  msgParams,
 		Subject: subject,
 		Body:    body,
@@ -143,6 +172,111 @@ func (s *Sender) sendFunc(_ context.Context, payload []byte) (string, *retrier.E
 	}
 
 	return result.Response, nil
+}
+
+func (s *Sender) filterRecipients(ctx context.Context, msg *dto.Message) ([]string, dto.MessageMeta, int, error) {
+	if s.stopList == nil {
+		return msg.Recipients, msg.Meta, len(msg.Recipients), nil
+	}
+	recipients := append([]string(nil), msg.Recipients...)
+	meta := msg.Meta
+	isSMTP := s.cfg.Providers[msg.Transport] != nil && s.cfg.Providers[msg.Transport].Provider == "smtp"
+	if isSMTP {
+		meta = copyMeta(msg.Meta)
+		for key, value := range meta {
+			if isSMTPRecipientKey(key) {
+				values, err := smtpRecipientSlice(value)
+				if err != nil {
+					return nil, nil, 0, fmt.Errorf("%w in %s", errMalformedSMTPRecipients, key)
+				}
+				recipients = append(recipients, values...)
+			}
+		}
+	}
+	channel := ""
+	if msg.Tag != "" {
+		var err error
+		channel, err = s.channel(msg.Transport)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+	}
+	filtered, err := s.stopList.Filter(ctx, recipients, channel, msg.Tag)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	allowed := make(map[string]struct{}, len(filtered))
+	for _, recipient := range filtered {
+		allowed[recipient] = struct{}{}
+	}
+	to := filterList(msg.Recipients, allowed)
+	if isSMTP && meta != nil {
+		for key, value := range meta {
+			if isSMTPRecipientKey(key) {
+				values, err := smtpRecipientSlice(value)
+				if err != nil {
+					return nil, nil, 0, fmt.Errorf("%w in %s", errMalformedSMTPRecipients, key)
+				}
+				meta[key] = filterList(values, allowed)
+			}
+		}
+	}
+	if len(filtered) != len(recipients) {
+		slog.Info("filtered stop-listed recipients", "count", len(recipients)-len(filtered))
+	}
+	return to, meta, len(filtered), nil
+}
+
+func (s *Sender) channel(transport string) (string, error) {
+	return ResolveChannel(s.cfg.Providers[transport])
+}
+
+func isSMTPRecipientKey(key string) bool {
+	return strings.EqualFold(key, "cc") || strings.EqualFold(key, "bcc")
+}
+
+func copyMeta(meta dto.MessageMeta) dto.MessageMeta {
+	if meta == nil {
+		return dto.MessageMeta{}
+	}
+	copy := make(dto.MessageMeta, len(meta))
+	for key, value := range meta {
+		copy[key] = value
+	}
+	return copy
+}
+
+func smtpRecipientSlice(value any) ([]string, error) {
+	if value == nil {
+		return nil, nil
+	}
+	values, ok := value.([]string)
+	if ok {
+		return values, nil
+	}
+	items, ok := value.([]any)
+	if !ok {
+		return nil, fmt.Errorf("not an array")
+	}
+	values = make([]string, 0, len(items))
+	for _, item := range items {
+		value, ok := item.(string)
+		if !ok {
+			return nil, fmt.Errorf("not a string")
+		}
+		values = append(values, value)
+	}
+	return values, nil
+}
+
+func filterList(values []string, allowed map[string]struct{}) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := allowed[value]; ok {
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 func (s *Sender) Run() {

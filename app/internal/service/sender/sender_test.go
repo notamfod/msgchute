@@ -127,7 +127,7 @@ func TestSender_Init(t *testing.T) {
 	wm.On("RegisterWorker", "email", mock.Anything, mock.Anything).Return(nil).Once()
 	wm.On("RegisterWorker", "sms", mock.Anything, mock.Anything).Return(nil).Once()
 
-	sender := NewSender(ctx, cfg, pm, wm, tmplGen)
+	sender := NewSender(ctx, cfg, pm, wm, tmplGen, nil)
 	err := sender.Init()
 	assert.NoError(t, err)
 	wm.AssertExpectations(t)
@@ -163,7 +163,7 @@ func TestSender_Init_Error(t *testing.T) {
 	pm.On("BuildPlugin", "email", "", mock.Anything).Return(nil).Once()
 	wm.On("RegisterWorker", "email", mock.Anything, mock.Anything).Return(errors.New("registration failed")).Once()
 
-	sender := NewSender(ctx, cfg, pm, wm, tmplGen)
+	sender := NewSender(ctx, cfg, pm, wm, tmplGen, nil)
 	err := sender.Init()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "registration failed")
@@ -178,7 +178,7 @@ func TestSender_sendFunc(t *testing.T) {
 	wm := new(MockWorkerManager)
 	tmplGen := new(MockTemplateGenerator)
 
-	sender := NewSender(ctx, cfg, pm, wm, tmplGen)
+	sender := NewSender(ctx, cfg, pm, wm, tmplGen, nil)
 	sendFunc := sender.sendFunc
 
 	t.Run("success", func(t *testing.T) {
@@ -317,7 +317,7 @@ func TestSender_Run(t *testing.T) {
 
 	wm.On("Start").Once()
 
-	sender := NewSender(ctx, cfg, pm, wm, tmplGen)
+	sender := NewSender(ctx, cfg, pm, wm, tmplGen, nil)
 	sender.Run()
 	wm.AssertExpectations(t)
 }
@@ -332,7 +332,7 @@ func TestSender_Shutdown(t *testing.T) {
 	wm.On("Stop").Once()
 	pm.On("Close").Once()
 
-	sender := NewSender(ctx, cfg, pm, wm, tmplGen)
+	sender := NewSender(ctx, cfg, pm, wm, tmplGen, nil)
 	sender.Shutdown()
 	wm.AssertExpectations(t)
 	pm.AssertExpectations(t)

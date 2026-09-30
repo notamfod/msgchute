@@ -21,6 +21,7 @@ type SenderMessageRequest struct {
 	Code       *string           `json:"code,omitempty" db:"code"`
 	Params     dto.MessageParams `json:"params,omitempty" db:"params"`
 	Transport  string            `json:"transport" db:"transport" validate:"required"` // Transport message provider
+	Tag        string            `json:"tag,omitempty"`
 	Subject    string            `json:"subject" db:"subject"`
 	Body       string            `json:"body" db:"body"`
 	Deadline   time.Time         `json:"deadline" db:"deadline"`
@@ -68,6 +69,7 @@ func (e *SenderEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Code:       msgRequest.Code,
 		Params:     msgRequest.Params,
 		Transport:  msgRequest.Transport,
+		Tag:        msgRequest.Tag,
 		Subject:    msgRequest.Subject,
 		Body:       msgRequest.Body,
 		Deadline:   msgRequest.Deadline,
@@ -75,7 +77,7 @@ func (e *SenderEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Schedule:   msgRequest.Schedule,
 	})
 	if sendErr != nil {
-		if errors.Is(sendErr, sender.ErrUnknownTransport) || errors.Is(sendErr, template.ErrMissingParameters) {
+		if isClientSendError(sendErr) {
 			response.WriteErrorResponse(w, r, http.StatusBadRequest, sendErr)
 			return
 		}
@@ -93,6 +95,7 @@ func (e *SenderEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 type batchSenderHandler interface {
 	Handle(msg []*dto.Message) []*dto.AddBatchMessageResponse
+	Validate([]*dto.Message) error
 }
 
 type BatchSenderEndpoint struct {
@@ -133,6 +136,7 @@ func (e *BatchSenderEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 			Code:       request[i].Code,
 			Params:     request[i].Params,
 			Transport:  request[i].Transport,
+			Tag:        request[i].Tag,
 			Subject:    request[i].Subject,
 			Body:       request[i].Body,
 			Deadline:   request[i].Deadline,
@@ -141,9 +145,21 @@ func (e *BatchSenderEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		})
 	}
 
+	if err := e.h.Validate(messages); err != nil {
+		if isClientSendError(err) {
+			response.WriteErrorResponse(w, r, http.StatusBadRequest, err)
+			return
+		}
+		response.WriteErrorResponse(w, r, http.StatusInternalServerError, errors.New("internal server error"))
+		return
+	}
 	result := e.h.Handle(messages)
 
 	response.WriteSuccessResponse(w, r, http.StatusOK, result)
+}
+
+func isClientSendError(err error) bool {
+	return errors.Is(err, sender.ErrUnknownTransport) || errors.Is(err, sender.ErrInvalidTag) || errors.Is(err, sender.ErrUnknownPreferenceChannel) || errors.Is(err, template.ErrMissingParameters)
 }
 
 // Retry
@@ -181,7 +197,7 @@ func (e *MessageRetryEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
 	m, t, err := e.h.Handle(request)
 	if err != nil {
-		if errors.Is(err, sender.ErrUnknownTransport) || errors.Is(err, template.ErrMissingParameters) {
+		if isClientSendError(err) {
 			response.WriteErrorResponse(w, r, http.StatusBadRequest, err)
 			return
 		}

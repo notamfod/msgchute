@@ -12,6 +12,7 @@ type Config struct {
 
 type ProviderConfig struct {
 	Provider        string          `yaml:"provider"`
+	Channel         string          `yaml:"channel"`
 	RetrierSettings RetrierSettings `yaml:"settings"`
 	Params          map[string]any  `yaml:"params"`
 }

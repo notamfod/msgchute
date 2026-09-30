@@ -9,6 +9,7 @@ import (
 	"github.com/devian2011/msgchute/internal/service/auth"
 	"github.com/devian2011/msgchute/internal/service/event"
 	"github.com/devian2011/msgchute/internal/service/sender"
+	"github.com/devian2011/msgchute/internal/service/stoplist"
 	"github.com/devian2011/msgchute/internal/service/template"
 )
 
@@ -49,6 +50,7 @@ type PublicHandlers struct {
 }
 
 type AdminHandlers struct {
+	StopList        *stoplist.Service
 	TemplateCreator *admin.TemplateCreateHandler
 	TemplateUpdater *admin.TemplateUpdateHandler
 	TemplateFinder  *admin.TemplateFinderHandler

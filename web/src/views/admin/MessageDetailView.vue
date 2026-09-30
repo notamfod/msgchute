@@ -47,6 +47,10 @@
               <span class="fw-bold font-monospace text-dark">{{ record.message.senderId }}</span>
             </div>
             <div class="list-group-item px-0 py-2">
+              <span class="text-muted d-block small text-uppercase fw-semibold">Тег сообщения:</span>
+              <span class="text-dark">{{ record.message.tag || 'Без тега' }}</span>
+            </div>
+            <div class="list-group-item px-0 py-2">
               <span class="text-muted d-block small text-uppercase fw-semibold">Template Link Code:</span>
               <span class="font-monospace text-secondary fw-semibold">{{ record.message.code || 'Raw Payload (Direct Body)' }}</span>
             </div>

@@ -7,10 +7,17 @@ import MessageListView from "@/views/admin/MessageListView.vue";
 import MessageDetailView from "@/views/admin/MessageDetailView.vue";
 import SendMessageView from "@/views/public/SendMessageView.vue";
 import TemplateListView from "@/views/admin/TemplateListView.vue";
+import StopListView from "@/views/admin/StopListView.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    {
+      path: '/admin/subscriptions',
+      alias: '/admin/stop-list',
+      name: 'AdminSubscriptions',
+      component: StopListView,
+    },
     {
       path: '/',
       name: 'Home',

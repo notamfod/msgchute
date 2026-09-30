@@ -6,6 +6,16 @@ import (
 
 type queue interface {
 	Add(*dto.Message) (*dto.Message, *dto.Task, error)
+	Validate(*dto.Message) error
+}
+
+func (h *BatchSenderHandler) Validate(messages []*dto.Message) error {
+	for _, message := range messages {
+		if err := h.q.Validate(message); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type SenderHandler struct {

@@ -16,7 +16,11 @@ import (
 	"github.com/devian2011/msgchute/pkg/generate"
 )
 
-var ErrUnknownTransport = errors.New("unknown transport")
+var (
+	ErrUnknownTransport         = errors.New("unknown transport")
+	ErrInvalidTag               = errors.New("invalid message tag")
+	ErrUnknownPreferenceChannel = errors.New("unknown preference channel")
+)
 
 type Queue struct {
 	templates   TemplateGenerator
@@ -39,8 +43,8 @@ func NewQueue(ctx context.Context, db *sqlx.DB, taskRepo taskRepo, messageRepo m
 }
 
 func (s *Queue) Add(message *dto.Message) (*dto.Message, *dto.Task, error) {
-	if s.providers[message.Transport] == nil {
-		return nil, nil, fmt.Errorf("%w: %s", ErrUnknownTransport, message.Transport)
+	if err := s.Validate(message); err != nil {
+		return nil, nil, err
 	}
 	if _, _, err := s.templates.GenerateMessage(message); err != nil {
 		return nil, nil, err
@@ -110,6 +114,48 @@ func (s *Queue) Add(message *dto.Message) (*dto.Message, *dto.Task, error) {
 	return message, task, nil
 }
 
+func (s *Queue) Validate(message *dto.Message) error {
+	if message == nil {
+		return ErrUnknownTransport
+	}
+	p := s.providers[message.Transport]
+	if p == nil {
+		return fmt.Errorf("%w: %s", ErrUnknownTransport, message.Transport)
+	}
+	if message.Tag == "" {
+		return nil
+	}
+	if !ValidTag(message.Tag) {
+		return ErrInvalidTag
+	}
+	_, err := ResolveChannel(p)
+	return err
+}
+
+func ValidTag(tag string) bool { return tag == "order" || tag == "promotion" || tag == "news" }
+
+func ResolveChannel(p *ProviderConfig) (string, error) {
+	if p == nil {
+		return "", ErrUnknownTransport
+	}
+	if p.Channel != "" {
+		if p.Channel == "email" || p.Channel == "sms" || p.Channel == "whatsapp" {
+			return p.Channel, nil
+		}
+		return "", ErrUnknownPreferenceChannel
+	}
+	switch p.Provider {
+	case "smtp":
+		return "email", nil
+	case "smsc", "beeline":
+		return "sms", nil
+	case "whatsapp":
+		return "whatsapp", nil
+	default:
+		return "", ErrUnknownPreferenceChannel
+	}
+}
+
 // Retry send repeat action for message
 func (s *Queue) Retry(mrr *dto.MessageRetryRequest) (*dto.Message, *dto.Task, error) {
 	msg, err := s.messageRepo.GetByID(s.ctx, mrr.ID)
@@ -119,8 +165,8 @@ func (s *Queue) Retry(mrr *dto.MessageRetryRequest) (*dto.Message, *dto.Task, er
 	if msg == nil {
 		return nil, nil, errors.New("message not found")
 	}
-	if s.providers[msg.Transport] == nil {
-		return nil, nil, fmt.Errorf("%w: %s", ErrUnknownTransport, msg.Transport)
+	if err := s.Validate(msg); err != nil {
+		return nil, nil, err
 	}
 	if _, _, err := s.templates.GenerateMessage(msg); err != nil {
 		return nil, nil, err

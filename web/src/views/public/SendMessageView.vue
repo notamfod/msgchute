@@ -22,6 +22,18 @@
           </BCol>
 
           <BCol md="12">
+            <BFormGroup label="Тег сообщения (необязательно):" label-for="message-tag" class="small fw-semibold text-muted">
+              <select id="message-tag" v-model="form.tag" class="form-select">
+                <option value="">Без тега</option>
+                <option value="order">Уведомление по заказу</option>
+                <option value="promotion">Акции и предложения</option>
+                <option value="news">Новости</option>
+              </select>
+              <small>Без тега проверяется только полный отказ от уведомлений.</small>
+            </BFormGroup>
+          </BCol>
+
+          <BCol md="12">
             <BFormGroup label="Recipients (Type values and press Enter):" class="small fw-semibold text-muted">
               <Multiselect
                   v-model="form.recipients"
@@ -275,6 +287,7 @@ const dictionaries = reactive({
 })
 
 const form = reactive({
+  tag: '',
   sender_id: '',
   transport: '',
   code: null,
@@ -327,6 +340,7 @@ function serializePayload() {
   }
 
   return {
+    tag: form.tag || undefined,
     sender_id: form.sender_id,
     transport: form.transport,
     code: form.code,
@@ -387,6 +401,7 @@ const handleTemplateChange = (newKey) => {
 
 
 function resetForm() {
+  form.tag = ''
   form.sender_id = ''
   form.transport = ''
   form.code = null

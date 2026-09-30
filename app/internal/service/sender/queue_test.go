@@ -22,6 +22,25 @@ func (queueTestGenerator) GenerateMessage(*dto.Message) (string, string, error) 
 	return "", "test", nil
 }
 
+func TestQueueValidateTaggedMessage(t *testing.T) {
+	queue := NewQueue(context.Background(), nil, nil, nil, map[string]*ProviderConfig{
+		"mail":    {Provider: "smtp"},
+		"unknown": {Provider: "custom"},
+	}, queueTestGenerator{})
+	if err := queue.Validate(&dto.Message{Transport: "mail", Tag: "order"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := queue.Validate(&dto.Message{Transport: "mail", Tag: "other"}); !errors.Is(err, ErrInvalidTag) {
+		t.Fatalf("Validate() error = %v", err)
+	}
+	if err := queue.Validate(&dto.Message{Transport: "unknown", Tag: "order"}); !errors.Is(err, ErrUnknownPreferenceChannel) {
+		t.Fatalf("Validate() error = %v", err)
+	}
+	if err := queue.Validate(&dto.Message{Transport: "missing", Tag: "order"}); !errors.Is(err, ErrUnknownTransport) {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
 func TestQueue_Add(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -425,4 +444,16 @@ func TestQueue_Retry(t *testing.T) {
 			assert.NoError(t, sqlMock.ExpectationsWereMet())
 		})
 	}
+}
+
+func TestQueueRetryValidatesPersistedTaggedMessage(t *testing.T) {
+	messageRepo := new(MockMessageRepo)
+	message := &dto.Message{ID: uuid.New(), Transport: "custom", Tag: "order"}
+	messageRepo.On("GetByID", mock.Anything, message.ID).Return(message, nil).Once()
+	queue := NewQueue(context.Background(), nil, new(MockTaskRepo), messageRepo, map[string]*ProviderConfig{"custom": {Provider: "custom"}}, queueTestGenerator{})
+	_, _, err := queue.Retry(&dto.MessageRetryRequest{ID: message.ID})
+	if !errors.Is(err, ErrUnknownPreferenceChannel) {
+		t.Fatalf("Retry() error = %v", err)
+	}
+	messageRepo.AssertExpectations(t)
 }

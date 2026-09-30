@@ -50,6 +50,7 @@ export class MessageDto {
         this.code = data.code || null;
         this.params = data.params || {};
         this.transport = data.transport;
+        this.tag = data.tag || '';
         this.subject = data.subject || 'No Subject';
         this.body = data.body || '';
         this.deadline = data.deadline ? new Date(data.deadline) : null;
