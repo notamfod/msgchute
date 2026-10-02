@@ -42,6 +42,10 @@ func Bootstrap(ctx context.Context, cfgFilePath string) (*registry.AppRegistry, 
 	taskResultRepo := repository.NewTaskResultRepository(db)
 	stopListRepo := repository.NewStopListRepository(db)
 	stopListService := stoplist.New(stopListRepo)
+	onboardingStore, onboardingErr := sender.NewOnboardingStore(db, cfg.Providers.Providers)
+	if onboardingErr != nil {
+		return nil, fmt.Errorf("init messenger onboarding: %w", onboardingErr)
+	}
 
 	// Auth block
 	authProvider, authMiddleware, authProviderErr := initAuth(ctx, cfg.Auth)
@@ -52,7 +56,7 @@ func Bootstrap(ctx context.Context, cfgFilePath string) (*registry.AppRegistry, 
 	httpSrv := web.NewServer(cfg.Http)
 
 	// Message services
-	msgStatusUpdater := message.NewStatusUpdater(db, msgRepo, taskRepo)
+	msgStatusUpdater := message.NewStatusUpdater(db, msgRepo, taskRepo, onboardingStore)
 
 	// Init sender event bus
 	eventBus := event.NewBus(ctx, msgStatusUpdater)
@@ -66,7 +70,7 @@ func Bootstrap(ctx context.Context, cfgFilePath string) (*registry.AppRegistry, 
 
 	// Sender services init
 	providerManager := sender.NewProviderManager(ctx, cfg.Providers.PluginMap)
-	workerStore := sender.NewWorkerStore(ctx, db, taskResultRepo, taskRepo, msgRepo)
+	workerStore := sender.NewWorkerStore(ctx, db, taskResultRepo, taskRepo, msgRepo, onboardingStore)
 	workerManager := retrier.NewManager(
 		ctx, workerStore, &sender.Logger{}, retrier.NewBackOffStrategy(),
 		cfg.Providers.MaxBufferSize, cfg.Providers.FetchTaskTimeout, cfg.Providers.FetchTaskTimeoutMax,
@@ -77,7 +81,7 @@ func Bootstrap(ctx context.Context, cfgFilePath string) (*registry.AppRegistry, 
 
 	// msgSender
 	msgSender := sender.NewSender(ctx, cfg.Providers, providerManager, workerManager, tmplMgr, stopListService)
-	msgQueue := sender.NewQueue(ctx, db, taskRepo, msgRepo, cfg.Providers.Providers, tmplMgr)
+	msgQueue := sender.NewQueue(ctx, db, taskRepo, msgRepo, cfg.Providers.Providers, tmplMgr, onboardingStore)
 
 	return &registry.AppRegistry{
 		DB:           db,
@@ -108,7 +112,7 @@ func Bootstrap(ctx context.Context, cfgFilePath string) (*registry.AppRegistry, 
 
 				MessageFinder:          admin.NewMessageFindHandler(msgFinder),
 				MessageFindByID:        admin.NewMessageFindByIDHandler(msgFinder),
-				MessageDictionary:      admin.NewMessageDictionaryHandler(msgFinder),
+				MessageDictionary:      admin.NewMessageDictionaryHandler(msgFinder, cfg.Providers.Transports()),
 				MessageRecipientFinder: admin.NewMessageRecipientFindHandler(msgFinder),
 
 				WorkerStatus: admin.NewWorkerHandler(workerManager),

@@ -7,6 +7,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/devian2011/msgchute/internal/dto"
+	"github.com/devian2011/msgchute/internal/service/sender"
 )
 
 type messageRecipientFinder interface {
@@ -27,16 +28,20 @@ func (h *MessageRecipientFindHandler) Handle(ctx context.Context, search string)
 
 type messageDictionaryGetter interface {
 	GetSenders(ctx context.Context) ([]string, error)
-	GetTransports(ctx context.Context) ([]string, error)
 	GetTemplates(ctx context.Context) ([]string, error)
 }
 
 type MessageDictionaryHandler struct {
-	getter messageDictionaryGetter
+	getter     messageDictionaryGetter
+	transports []string
 }
 
-func NewMessageDictionaryHandler(getter messageDictionaryGetter) *MessageDictionaryHandler {
-	return &MessageDictionaryHandler{getter: getter}
+func NewMessageDictionaryHandler(getter messageDictionaryGetter, transports []sender.Transport) *MessageDictionaryHandler {
+	codes := make([]string, len(transports))
+	for i := range transports {
+		codes[i] = transports[i].Code
+	}
+	return &MessageDictionaryHandler{getter: getter, transports: codes}
 }
 
 func (h *MessageDictionaryHandler) Handle(ctx context.Context) (*dto.MessageDictionaries, error) {
@@ -47,11 +52,7 @@ func (h *MessageDictionaryHandler) Handle(ctx context.Context) (*dto.MessageDict
 		result.SenderIDs, getterErr = h.getter.GetSenders(ctx)
 		return getterErr
 	})
-	g.Go(func() error {
-		var getterErr error
-		result.Transports, getterErr = h.getter.GetTransports(ctx)
-		return getterErr
-	})
+	result.Transports = h.transports
 	g.Go(func() error {
 		var getterErr error
 		result.Templates, getterErr = h.getter.GetTemplates(ctx)

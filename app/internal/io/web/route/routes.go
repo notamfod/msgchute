@@ -12,7 +12,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/httplog/v3"
-	"github.com/swaggo/http-swagger/v2"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 
 	"github.com/devian2011/msgchute/internal/io/web"
 	"github.com/devian2011/msgchute/internal/io/web/endpoint/admin"
@@ -134,6 +134,7 @@ func managementAPI(r *chi.Mux, handlers *registry.Handlers) *chi.Mux {
 func publicAPI(r *chi.Mux, handlers *registry.Handlers) *chi.Mux {
 	r.Method(http.MethodPatch, "/api/v1/templates/{code}/metadata", public.NewTemplateMetadataEndpoint(handlers.Public.TemplateMetadata))
 	r.Method(http.MethodGet, "/api/v1/transports", public.NewTransportsEndpoint(handlers.Public.Transports))
+	r.Method(http.MethodGet, "/api/v1/enums", public.NewEnumsEndpoint(handlers.Public.Transports))
 	r.HandleFunc("/ping", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
 		writer.Write([]byte("pong"))

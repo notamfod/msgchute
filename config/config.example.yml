@@ -45,6 +45,11 @@ providers:
         from: mail@example.com
     tg:
       provider: telegram
+      onboarding:
+        enabled: ${APP_MESSENGER_ONBOARDING_ENABLED|false}
+        botID: "${APP_TELEGRAM_BOT_ID|}"
+        smsTransport: beeline
+        connectURL: https://mircli.ru/notification/connect/tg
       settings:
         workers:
           min: 2

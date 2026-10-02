@@ -69,6 +69,8 @@ definitions:
         $ref: '#/definitions/github_com_devian2011_msgchute_internal_dto.MessageStatus'
       subject:
         type: string
+      tag:
+        type: string
       transport:
         description: Transport message provider
         type: string
@@ -285,6 +287,31 @@ definitions:
           $ref: '#/definitions/github_com_devian2011_msgchute_internal_dto.Template'
         type: object
     type: object
+  internal_io_web_endpoint_public.Enums:
+    properties:
+      message_statuses:
+        items:
+          $ref: '#/definitions/github_com_devian2011_msgchute_internal_dto.MessageStatus'
+        type: array
+      recipient_kinds:
+        items:
+          type: string
+        type: array
+      subscriptions:
+        additionalProperties:
+          items:
+            type: string
+          type: array
+        type: object
+      tags:
+        items:
+          type: string
+        type: array
+      transports:
+        items:
+          $ref: '#/definitions/github_com_devian2011_msgchute_internal_service_sender.Transport'
+        type: array
+    type: object
   internal_io_web_endpoint_public.PreviewMessageRequest:
     properties:
       body:
@@ -319,6 +346,8 @@ definitions:
       sender_id:
         type: string
       subject:
+        type: string
+      tag:
         type: string
       transport:
         description: Transport message provider
@@ -369,8 +398,8 @@ paths:
     get:
       consumes:
       - application/json
-      description: Returns historical message filters, including old or invalid transports.
-        Use /api/v1/transports for configured delivery profiles.
+      description: Returns historical sender and template filters with transports
+        from configured delivery profiles.
       produces:
       - application/json
       responses:
@@ -697,6 +726,26 @@ paths:
           schema:
             $ref: '#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response'
       summary: Send multiple messages
+      tags:
+      - public.messages
+  /api/v1/enums:
+    get:
+      description: |-
+        Returns configured transport profiles and valid message, recipient, and subscription codes.
+        Omitting a message tag applies only the full opt-out check. Tagged TG and MAX delivery is not currently supported.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_io_web_endpoint_public.Enums'
+              type: object
+      summary: List API reference enums
       tags:
       - public.messages
   /api/v1/message/retry:

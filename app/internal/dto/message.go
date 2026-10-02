@@ -60,6 +60,10 @@ type Message struct {
 	Deadline   time.Time     `json:"deadline" db:"deadline"`
 	Retry      *Retry        `json:"retry,omitempty" db:"retry"`
 	Schedule   time.Time     `json:"schedule,omitempty" db:"schedule"`
+
+	// RoutingRecipients carries the original phone recipients in internal worker payloads.
+	// It is not stored with the message and is populated only by the onboarding router.
+	RoutingRecipients Recipients `json:"_routing_recipients,omitempty" db:"-" swaggerignore:"true"`
 }
 
 // Recipients represents a list of target delivery addresses or identifiers.
@@ -180,18 +184,18 @@ type Template struct {
 	Metadata    TemplateMetadata `json:"metadata" db:"metadata"`
 	Systems     TemplateLabels   `json:"systems,omitempty" db:"systems"`
 	Channels    TemplateLabels   `json:"channels,omitempty" db:"channels"`
-	Code        string         `json:"code" db:"code" validate:"required"`
-	Name        string         `json:"name" db:"name" validate:"required"`
-	Description string         `json:"description" db:"description"`
-	Params      TemplateParams `json:"params" db:"params"`
-	Subject     string         `json:"subject" db:"subject" validate:"required"`
-	Body        string         `json:"body" db:"body" validate:"required"`
+	Code        string           `json:"code" db:"code" validate:"required"`
+	Name        string           `json:"name" db:"name" validate:"required"`
+	Description string           `json:"description" db:"description"`
+	Params      TemplateParams   `json:"params" db:"params"`
+	Subject     string           `json:"subject" db:"subject" validate:"required"`
+	Body        string           `json:"body" db:"body" validate:"required"`
 }
 
 // TemplateParam handles structural fallback expectations when explicit variables remain unassigned.
 type TemplateParam struct {
-	Default string `json:"default"`
-	Required *bool `json:"required,omitempty"`
+	Default  string `json:"default"`
+	Required *bool  `json:"required,omitempty"`
 }
 
 // TemplateParams lists baseline injection requirements needed to synthesize functional notifications.

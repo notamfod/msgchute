@@ -29,10 +29,11 @@ type Queue struct {
 	db          *sqlx.DB
 	taskRepo    taskRepo
 	messageRepo messageRepo
+	onboarding  *OnboardingStore
 }
 
-func NewQueue(ctx context.Context, db *sqlx.DB, taskRepo taskRepo, messageRepo messageRepo, providers map[string]*ProviderConfig, templates TemplateGenerator) *Queue {
-	return &Queue{
+func NewQueue(ctx context.Context, db *sqlx.DB, taskRepo taskRepo, messageRepo messageRepo, providers map[string]*ProviderConfig, templates TemplateGenerator, onboarding ...*OnboardingStore) *Queue {
+	queue := &Queue{
 		templates:   templates,
 		providers:   providers,
 		ctx:         ctx,
@@ -40,14 +41,23 @@ func NewQueue(ctx context.Context, db *sqlx.DB, taskRepo taskRepo, messageRepo m
 		taskRepo:    taskRepo,
 		messageRepo: messageRepo,
 	}
+	if len(onboarding) > 0 {
+		queue.onboarding = onboarding[0]
+	}
+	return queue
 }
 
 func (s *Queue) Add(message *dto.Message) (*dto.Message, *dto.Task, error) {
-	if err := s.Validate(message); err != nil {
+	subject, body, err := s.renderAndValidate(message)
+	if err != nil {
 		return nil, nil, err
 	}
-	if _, _, err := s.templates.GenerateMessage(message); err != nil {
-		return nil, nil, err
+	if s.onboarding != nil {
+		if s.onboarding.Enabled(message.Transport) {
+			// Freeze the rendered content used by a later messenger or SMS route.
+			message.Subject = subject
+			message.Body = body
+		}
 	}
 	message.ID = generate.ID()
 	now := time.Now()
@@ -68,26 +78,42 @@ func (s *Queue) Add(message *dto.Message) (*dto.Message, *dto.Task, error) {
 		nextRun = message.Schedule
 	}
 
-	task := &dto.Task{
-		ID:            generate.ID(),
-		MessageID:     message.ID,
-		Worker:        message.Transport,
-		Status:        retrier.StatusPending,
-		Retries:       0,
-		MaxRetries:    message.Retry.Retries,
-		BackOffCode:   message.Retry.Strategy,
-		BackOffParams: message.Retry.Params,
-		Deadline:      message.Deadline,
-		IsProcessed:   false,
+	newTask := func() *dto.Task {
+		return &dto.Task{
+			ID:            generate.ID(),
+			MessageID:     message.ID,
+			Worker:        message.Transport,
+			Status:        retrier.StatusPending,
+			Retries:       0,
+			MaxRetries:    message.Retry.Retries,
+			BackOffCode:   message.Retry.Strategy,
+			BackOffParams: message.Retry.Params,
+			Deadline:      message.Deadline,
+			IsProcessed:   false,
 
-		LockUntil: time.Time{},
-		CreatedAt: now,
-		LastRun:   time.Time{},
-		NextRun:   nextRun,
+			LockUntil: time.Time{},
+			CreatedAt: now,
+			LastRun:   time.Time{},
+			NextRun:   nextRun,
+		}
+	}
+	deliveryRecipients := []string(nil)
+	tasks := []*dto.Task{newTask()}
+	if s.onboarding != nil && s.onboarding.Enabled(message.Transport) {
+		deliveryRecipients = distinctOnboardingRecipients(message.Recipients)
+		tasks = make([]*dto.Task, 0, len(deliveryRecipients))
+		for range deliveryRecipients {
+			tasks = append(tasks, newTask())
+		}
+	}
+	if len(tasks) == 0 {
+		tasks = append(tasks, newTask())
 	}
 
 	if !message.Deadline.IsZero() {
-		task.Deadline = message.Deadline
+		for _, task := range tasks {
+			task.Deadline = message.Deadline
+		}
 	}
 
 	getErr := storage.InTransaction(context.TODO(), s.db, func(ctx context.Context) error {
@@ -97,10 +123,16 @@ func (s *Queue) Add(message *dto.Message) (*dto.Message, *dto.Task, error) {
 			return messageCreateErr
 		}
 
-		_, taskCreateErr := s.taskRepo.Create(ctx, task)
-		if taskCreateErr != nil {
-			slog.Error("Failed to create task", "error", taskCreateErr)
-			return taskCreateErr
+		for i, task := range tasks {
+			if _, taskCreateErr := s.taskRepo.Create(ctx, task); taskCreateErr != nil {
+				slog.Error("Failed to create task", "error", taskCreateErr)
+				return taskCreateErr
+			}
+			if len(deliveryRecipients) > 0 {
+				if err := s.onboarding.CreateDelivery(ctx, task, message, deliveryRecipients[i]); err != nil {
+					return err
+				}
+			}
 		}
 
 		return nil
@@ -111,7 +143,47 @@ func (s *Queue) Add(message *dto.Message) (*dto.Message, *dto.Task, error) {
 		return nil, nil, getErr
 	}
 
-	return message, task, nil
+	return message, tasks[0], nil
+}
+
+// Preflight performs all validation that can fail before queue persistence.
+// Batch callers use it for every message before adding the first one.
+func (s *Queue) Preflight(message *dto.Message) error {
+	_, _, err := s.renderAndValidate(message)
+	return err
+}
+
+func (s *Queue) renderAndValidate(message *dto.Message) (string, string, error) {
+	if err := s.Validate(message); err != nil {
+		return "", "", err
+	}
+	subject, body, err := s.templates.GenerateMessage(message)
+	if err != nil {
+		return "", "", err
+	}
+	if s.onboarding != nil {
+		if err := s.onboarding.ValidateContent(s.ctx, message, subject, body); err != nil {
+			return "", "", err
+		}
+	}
+	return subject, body, nil
+}
+
+func distinctOnboardingRecipients(recipients dto.Recipients) []string {
+	result := make([]string, 0, len(recipients))
+	seen := make(map[string]struct{}, len(recipients))
+	for _, recipient := range recipients {
+		key := "opaque:" + recipient
+		if phone, ok := explicitPhone(recipient); ok {
+			key = "phone:" + phone
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, recipient)
+	}
+	return result
 }
 
 func (s *Queue) Validate(message *dto.Message) error {
@@ -132,7 +204,7 @@ func (s *Queue) Validate(message *dto.Message) error {
 	return err
 }
 
-func ValidTag(tag string) bool { return tag == "order" || tag == "promotion" || tag == "news" }
+func ValidTag(tag string) bool { return dto.ValidMessageTag(tag) }
 
 func ResolveChannel(p *ProviderConfig) (string, error) {
 	if p == nil {
@@ -168,8 +240,10 @@ func (s *Queue) Retry(mrr *dto.MessageRetryRequest) (*dto.Message, *dto.Task, er
 	if err := s.Validate(msg); err != nil {
 		return nil, nil, err
 	}
-	if _, _, err := s.templates.GenerateMessage(msg); err != nil {
-		return nil, nil, err
+	if s.onboarding == nil || !s.onboarding.Enabled(msg.Transport) {
+		if _, _, err := s.templates.GenerateMessage(msg); err != nil {
+			return nil, nil, err
+		}
 	}
 	var task *dto.Task
 	err = storage.InTransaction(context.Background(), s.db, func(ctx context.Context) error {
@@ -226,31 +300,59 @@ func (s *Queue) Retry(mrr *dto.MessageRetryRequest) (*dto.Message, *dto.Task, er
 			nextRun = mrr.Schedule
 		}
 
-		task = &dto.Task{
-			ID:            generate.ID(),
-			MessageID:     msg.ID,
-			Worker:        msg.Transport,
-			Status:        retrier.StatusPending,
-			Retries:       0,
-			MaxRetries:    msgRetry.Retries,
-			BackOffCode:   msgRetry.Strategy,
-			BackOffParams: msgRetry.Params,
-			Deadline:      mrr.Deadline,
-			IsProcessed:   false,
+		newTask := func() *dto.Task {
+			return &dto.Task{
+				ID:            generate.ID(),
+				MessageID:     msg.ID,
+				Worker:        msg.Transport,
+				Status:        retrier.StatusPending,
+				Retries:       0,
+				MaxRetries:    msgRetry.Retries,
+				BackOffCode:   msgRetry.Strategy,
+				BackOffParams: msgRetry.Params,
+				Deadline:      mrr.Deadline,
+				IsProcessed:   false,
 
-			LockUntil: time.Time{},
-			CreatedAt: now,
-			LastRun:   time.Time{},
-			NextRun:   nextRun,
+				LockUntil: time.Time{},
+				CreatedAt: now,
+				LastRun:   time.Time{},
+				NextRun:   nextRun,
+			}
+		}
+		recipients := []string(nil)
+		onboardingMessage := false
+		if s.onboarding != nil {
+			var retryErr error
+			recipients, onboardingMessage, retryErr = s.onboarding.RetryRecipients(ctx, msg.ID)
+			if retryErr != nil {
+				return retryErr
+			}
+		}
+		if onboardingMessage && len(recipients) == 0 {
+			return errors.New("message already delivered to all recipients")
+		}
+		if !onboardingMessage {
+			task = newTask()
+			if _, taskCreateErr := s.taskRepo.Create(ctx, task); taskCreateErr != nil {
+				slog.Error("Failed to create task", "error", taskCreateErr)
+				return taskCreateErr
+			}
+			return nil
+		}
+		for _, recipient := range recipients {
+			created := newTask()
+			if task == nil {
+				task = created
+			}
+			if _, taskCreateErr := s.taskRepo.Create(ctx, created); taskCreateErr != nil {
+				return taskCreateErr
+			}
+			if err := s.onboarding.CreateDelivery(ctx, created, msg, recipient); err != nil {
+				return err
+			}
 		}
 
-		_, taskCreateErr := s.taskRepo.Create(ctx, task)
-		if taskCreateErr != nil {
-			slog.Error("Failed to create task", "error", taskCreateErr)
-			return taskCreateErr
-		}
-
-		return nil
+		return s.messageRepo.UpdateStatus(ctx, msg.ID, dto.MessageStatusRunning)
 	})
 
 	if err != nil {

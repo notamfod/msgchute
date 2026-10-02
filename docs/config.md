@@ -102,6 +102,11 @@ providers:
     # --------------------------------------------------------------------------
     tg:
       provider: telegram    # References the underlying plugin defined in pluginMap
+      onboarding:           # Optional phone-to-bot onboarding; disabled by default
+        enabled: ${APP_MESSENGER_ONBOARDING_ENABLED|false}
+        botID: "${APP_TELEGRAM_BOT_ID|}" # Must match this provider's sidecar bot ID
+        smsTransport: beeline
+        connectURL: https://mircli.ru/notification/connect/tg
       settings:
         workers:            # Worker pool matching strict Telegram API rate bounds
           min: 2
@@ -114,3 +119,5 @@ providers:
       params:               # JSON-serialized payload sent directly to the Telegram plugin's Configure method
         token: ${TELEGRAM_BOT_TOKEN} # Safe injection placeholder for sensitive bot credentials
 ```
+
+When onboarding is enabled for a Telegram or MAX profile, `botID`, `smsTransport`, and `connectURL` are required. `smsTransport` must name another configured profile. Keep `enabled` false where the matching bot sidecar and binding tables are unavailable. Bot IDs are strings so their numeric size is preserved exactly.

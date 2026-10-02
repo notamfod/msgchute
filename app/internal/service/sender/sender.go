@@ -106,8 +106,7 @@ func (s *Sender) sendFunc(ctx context.Context, payload []byte) (string, *retrier
 	getMsgErr := sonic.Unmarshal(payload, &msg)
 	if getMsgErr != nil {
 		return "", &retrier.ExecutionError{
-			Err: fmt.Errorf("error unmarshal message task payload: %s, err: %v",
-				string(payload), getMsgErr),
+			Err:   fmt.Errorf("error unmarshal message task payload: %w", getMsgErr),
 			State: retrier.CriticalState,
 		}
 	}
@@ -123,8 +122,7 @@ func (s *Sender) sendFunc(ctx context.Context, payload []byte) (string, *retrier
 	prv, getProviderErr := s.pm.GetProvider(msg.Transport)
 	if getProviderErr != nil {
 		return "", &retrier.ExecutionError{
-			Err: fmt.Errorf("unknown provider: %s payload: %s, err: %v",
-				msg.Transport, string(payload), getProviderErr),
+			Err:   fmt.Errorf("unknown provider %s: %w", msg.Transport, getProviderErr),
 			State: retrier.CriticalState,
 		}
 	}
@@ -132,8 +130,7 @@ func (s *Sender) sendFunc(ctx context.Context, payload []byte) (string, *retrier
 	subject, body, generateErr := s.tmplGenerator.GenerateMessage(&msg)
 	if generateErr != nil {
 		return "", &retrier.ExecutionError{
-			Err: fmt.Errorf("error generate task message payload: %s, err: %v",
-				string(payload), generateErr),
+			Err:   fmt.Errorf("error generate task message payload: %w", generateErr),
 			State: retrier.CriticalState,
 		}
 	}
@@ -161,8 +158,7 @@ func (s *Sender) sendFunc(ctx context.Context, payload []byte) (string, *retrier
 
 	if result.Err != nil {
 		responseErr := &retrier.ExecutionError{
-			Err: fmt.Errorf("error on message send: %s, err: %v",
-				string(payload), result.Err),
+			Err:   fmt.Errorf("error on message send: %w", result.Err),
 			State: retrier.UsualState,
 		}
 		if result.IsCritical {
@@ -179,6 +175,13 @@ func (s *Sender) filterRecipients(ctx context.Context, msg *dto.Message) ([]stri
 		return msg.Recipients, msg.Meta, len(msg.Recipients), nil
 	}
 	recipients := append([]string(nil), msg.Recipients...)
+	routingRecipients := msg.RoutingRecipients
+	if len(routingRecipients) > 0 {
+		if len(routingRecipients) != len(msg.Recipients) {
+			return nil, nil, 0, stoplist.ErrInvalidRecipient
+		}
+		recipients = append([]string(nil), routingRecipients...)
+	}
 	meta := msg.Meta
 	isSMTP := s.cfg.Providers[msg.Transport] != nil && s.cfg.Providers[msg.Transport].Provider == "smtp"
 	if isSMTP {
@@ -210,6 +213,14 @@ func (s *Sender) filterRecipients(ctx context.Context, msg *dto.Message) ([]stri
 		allowed[recipient] = struct{}{}
 	}
 	to := filterList(msg.Recipients, allowed)
+	if len(routingRecipients) > 0 {
+		to = make([]string, 0, len(msg.Recipients))
+		for i, original := range routingRecipients {
+			if _, ok := allowed[original]; ok {
+				to = append(to, msg.Recipients[i])
+			}
+		}
+	}
 	if isSMTP && meta != nil {
 		for key, value := range meta {
 			if isSMTPRecipientKey(key) {

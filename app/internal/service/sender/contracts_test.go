@@ -89,3 +89,8 @@ func (m *MockMessageRepo) Create(ctx context.Context, msg *dto.Message) error {
 	args := m.Called(ctx, msg)
 	return args.Error(0)
 }
+
+func (m *MockMessageRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status dto.MessageStatus) error {
+	args := m.Called(ctx, id, status)
+	return args.Error(0)
+}

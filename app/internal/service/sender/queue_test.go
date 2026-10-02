@@ -188,12 +188,14 @@ func TestQueue_Add(t *testing.T) {
 
 func TestQueueRejectsUnknownTransportBeforePersistence(t *testing.T) {
 	queue := NewQueue(context.Background(), nil, nil, nil, map[string]*ProviderConfig{"beeline": {}}, queueTestGenerator{})
-	message := &dto.Message{Transport: "yamail"}
-	assert.NotPanics(t, func() {
-		_, _, err := queue.Add(message)
-		assert.Error(t, err)
-		assert.Equal(t, uuid.Nil, message.ID)
-	})
+	for _, transport := range []string{"ya-mail", "yamail"} {
+		t.Run(transport, func(t *testing.T) {
+			message := &dto.Message{Transport: transport}
+			_, _, err := queue.Add(message)
+			assert.ErrorIs(t, err, ErrUnknownTransport)
+			assert.Equal(t, uuid.Nil, message.ID)
+		})
+	}
 }
 
 func TestQueue_Retry(t *testing.T) {

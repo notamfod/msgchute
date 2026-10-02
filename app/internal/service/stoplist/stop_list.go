@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/mail"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -23,6 +24,10 @@ var (
 	ErrNotFound             = errors.New("stop list entry not found")
 	ErrAlreadyExists        = errors.New("stop list entry already exists")
 	ErrInvalidSubscriptions = errors.New("invalid subscriptions")
+	subscriptionCatalog     = map[string]dto.SubscriptionList{
+		KindEmail: {"email.order", "email.promotion", "email.news"},
+		KindPhone: {"sms.order", "sms.promotion", "sms.news", "whatsapp.order", "whatsapp.promotion", "whatsapp.news"},
+	}
 )
 
 type Repository interface {
@@ -137,6 +142,16 @@ func (s *Service) Upsert(ctx context.Context, entry *dto.StopListEntry) (*dto.St
 
 func validKind(kind string) bool { return kind == KindEmail || kind == KindPhone }
 
+func RecipientKinds() []string { return []string{KindEmail, KindPhone} }
+
+func Subscriptions() map[string]dto.SubscriptionList {
+	result := make(map[string]dto.SubscriptionList, len(subscriptionCatalog))
+	for kind, subscriptions := range subscriptionCatalog {
+		result[kind] = append(dto.SubscriptionList(nil), subscriptions...)
+	}
+	return result
+}
+
 func defaultSubscriptions(kind string) dto.SubscriptionList {
 	if kind == KindEmail {
 		return dto.SubscriptionList{"email.order"}
@@ -145,17 +160,17 @@ func defaultSubscriptions(kind string) dto.SubscriptionList {
 }
 
 func validSubscriptions(kind string, subscriptions dto.SubscriptionList) bool {
+	allowed, ok := subscriptionCatalog[kind]
+	if !ok {
+		return false
+	}
 	seen := make(map[string]struct{}, len(subscriptions))
 	for _, subscription := range subscriptions {
 		if _, ok := seen[subscription]; ok {
 			return false
 		}
 		seen[subscription] = struct{}{}
-		if kind == KindEmail {
-			if subscription != "email.order" && subscription != "email.promotion" && subscription != "email.news" {
-				return false
-			}
-		} else if subscription != "sms.order" && subscription != "sms.promotion" && subscription != "sms.news" && subscription != "whatsapp.order" && subscription != "whatsapp.promotion" && subscription != "whatsapp.news" {
+		if !slices.Contains(allowed, subscription) {
 			return false
 		}
 	}
@@ -163,7 +178,7 @@ func validSubscriptions(kind string, subscriptions dto.SubscriptionList) bool {
 }
 
 func (s *Service) Filter(ctx context.Context, recipients []string, channel, tag string) ([]string, error) {
-	if tag != "" && !validTag(tag) {
+	if tag != "" && !dto.ValidMessageTag(tag) {
 		return nil, ErrInvalidEntry
 	}
 	if tag != "" && channel != "email" && channel != "sms" && channel != "whatsapp" {
@@ -249,5 +264,3 @@ func denied(entries map[string]dto.StopListEntry, values []string, channel, tag 
 	}
 	return !matched && !(tag == "order" && (channel == "email" || channel == "sms"))
 }
-
-func validTag(tag string) bool { return tag == "order" || tag == "promotion" || tag == "news" }

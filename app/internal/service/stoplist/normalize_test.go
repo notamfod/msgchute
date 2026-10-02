@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/devian2011/msgchute/internal/dto"
+	"github.com/stretchr/testify/require"
 )
 
 type createStub struct {
@@ -172,4 +173,13 @@ func TestTaggedRecipientsFailClosed(t *testing.T) {
 	if err != ErrInvalidRecipient {
 		t.Fatalf("Filter() error = %v, want %v", err, ErrInvalidRecipient)
 	}
+}
+
+func TestSubscriptionCatalogMatchesValidation(t *testing.T) {
+	require.Equal(t, []string{KindEmail, KindPhone}, RecipientKinds())
+	for kind, subscriptions := range Subscriptions() {
+		require.True(t, validSubscriptions(kind, subscriptions))
+	}
+	require.False(t, validSubscriptions(KindEmail, dto.SubscriptionList{"sms.order"}))
+	require.False(t, validSubscriptions("unknown", nil))
 }

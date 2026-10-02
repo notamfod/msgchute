@@ -17,7 +17,7 @@ const docTemplate = `{
     "paths": {
         "/api/admin/v1/dictionary/message": {
             "get": {
-                "description": "Returns historical message filters, including old or invalid transports. Use /api/v1/transports for configured delivery profiles.",
+                "description": "Returns historical sender and template filters with transports from configured delivery profiles.",
                 "consumes": [
                     "application/json"
                 ],
@@ -500,6 +500,38 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/enums": {
+            "get": {
+                "description": "Returns configured transport profiles and valid message, recipient, and subscription codes.\nOmitting a message tag applies only the full opt-out check. Tagged TG and MAX delivery is not currently supported.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public.messages"
+                ],
+                "summary": "List API reference enums",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_io_web_endpoint_public.Enums"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/message/retry": {
             "post": {
                 "description": "Creates a new task to retry a previously failed or pending message. It allows overriding retry policy and schedule.",
@@ -859,6 +891,9 @@ const docTemplate = `{
                 "subject": {
                     "type": "string"
                 },
+                "tag": {
+                    "type": "string"
+                },
                 "transport": {
                     "description": "Transport message provider",
                     "type": "string"
@@ -1177,6 +1212,44 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_io_web_endpoint_public.Enums": {
+            "type": "object",
+            "properties": {
+                "message_statuses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_devian2011_msgchute_internal_dto.MessageStatus"
+                    }
+                },
+                "recipient_kinds": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "subscriptions": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "transports": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_devian2011_msgchute_internal_service_sender.Transport"
+                    }
+                }
+            }
+        },
         "internal_io_web_endpoint_public.PreviewMessageRequest": {
             "type": "object",
             "properties": {
@@ -1233,6 +1306,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "subject": {
+                    "type": "string"
+                },
+                "tag": {
                     "type": "string"
                 },
                 "transport": {

@@ -57,7 +57,7 @@ func NewMessageDictionaryEndpoint(h messageDictionaryHandler) *MessageDictionary
 }
 
 // @Summary		Get message dictionaries
-// @Description	Returns historical message filters, including old or invalid transports. Use /api/v1/transports for configured delivery profiles.
+// @Description	Returns historical sender and template filters with transports from configured delivery profiles.
 // @Tags			admin.dictionaries
 // @Accept			json
 // @Produce		json

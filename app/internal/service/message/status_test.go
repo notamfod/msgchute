@@ -1,6 +1,7 @@
 package message
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -13,6 +14,15 @@ import (
 
 	"github.com/devian2011/msgchute/internal/dto"
 )
+
+type onboardingStatusStub struct {
+	aggregateCalls int
+}
+
+func (s *onboardingStatusStub) IsOnboardingTask(context.Context, uuid.UUID) (bool, error) {
+	s.aggregateCalls++
+	return true, nil
+}
 
 func TestStatusUpdater_UpdateStatusByTaskID(t *testing.T) {
 	tests := []struct {
@@ -155,4 +165,26 @@ func TestStatusUpdater_UpdateStatusByTaskID(t *testing.T) {
 			assert.NoError(t, sqlMock.ExpectationsWereMet())
 		})
 	}
+}
+
+func TestOnboardingStatusNeverDowngradesSucceededMessage(t *testing.T) {
+	db, sqlMock, err := sqlmock.New()
+	assert.NoError(t, err)
+	defer db.Close()
+	sqlxDB := sqlx.NewDb(db, "postgres")
+	taskRepo := new(MockTaskRepo)
+	msgRepo := new(MockMessageRepo)
+	onboarding := &onboardingStatusStub{}
+	taskID := uuid.New()
+	messageID := uuid.New()
+	taskRepo.On("GetByID", mock.Anything, taskID).Return(&dto.Task{ID: taskID, MessageID: messageID}, nil).Once()
+	taskRepo.On("Unlock", mock.Anything, []uuid.UUID{taskID}).Return(nil).Once()
+	sqlMock.ExpectBegin()
+	sqlMock.ExpectCommit()
+
+	err = NewStatusUpdater(sqlxDB, msgRepo, taskRepo, onboarding).UpdateStatusByTaskID(taskID, dto.MessageStatusFailed)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, onboarding.aggregateCalls)
+	msgRepo.AssertNotCalled(t, "UpdateStatus", mock.Anything, mock.Anything, mock.Anything)
+	assert.NoError(t, sqlMock.ExpectationsWereMet())
 }

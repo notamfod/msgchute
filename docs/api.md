@@ -31,12 +31,30 @@ Use `code` as the send request's `transport`. Multiple codes can use the same pr
 
 `sender` is an optional configured default (`smtp.params.from` or `smsc.params.sender`), not the request's `sender_id`. An omitted sender means the plugin or account determines it. Provider credentials and arbitrary plugin parameters are never returned. See [profile configuration](config.md#multiple-delivery-profiles).
 
-Historical dictionaries are separate:
+GET `/api/v1/enums`
 
-* `GET /api/admin/v1/dictionary/message` supplies filters from stored messages, including old or invalid transport codes. Do not use it for composing new messages.
+Returns the machine-readable reference values used by API clients: the same configured `transports` catalog as `/api/v1/transports`, `message_statuses`, valid message `tags`, `recipient_kinds`, and allowed `subscriptions` grouped by recipient kind. All values use the codes accepted by service validation.
+
+```json
+{"status":"success","data":{"transports":[{"code":"ya_mail","provider":"smtp","available":true}],"message_statuses":["running","succeeded","failed","declined"],"tags":["order","promotion","news"],"recipient_kinds":["email","phone"],"subscriptions":{"email":["email.order","email.promotion","email.news"],"phone":["sms.order","sms.promotion","sms.news","whatsapp.order","whatsapp.promotion","whatsapp.news"]}}}
+```
+
+The message `tag` remains optional. Omitting it applies only the legacy full opt-out check. Tagged TG and MAX delivery is not currently supported; use tags only with a transport whose configured channel resolves to `email`, `sms`, or `whatsapp`.
+
+Administrative dictionaries are separate:
+
+* `GET /api/admin/v1/dictionary/message` supplies historical sender and template filters plus the currently configured transport codes.
 * `GET /api/admin/v1/dictionary/message-recipients?search=...` supplies historical recipient filter suggestions. Without `search` it returns all distinct historical recipients. It is not an address book or a recipient type specification.
 
 For SMS integrations, send international phone numbers such as `+79261234567` without spaces or punctuation. For email, use an address such as `user@example.com`. Other plugins define their own recipient format. The generic service does not enforce a universal phone/email format for every plugin.
+
+### Telegram and MAX phone onboarding
+
+When onboarding is enabled for a configured TG or MAX profile, a recipient written as `+` plus a valid international phone number, or as an 11-digit Russian number beginning with `7` or `8`, uses durable phone onboarding. If that phone is already verified for the configured bot, the message goes directly to the bound messenger contact. Otherwise the service sends one Beeline invitation SMS with the configured connection link, then keeps the original message in `running` state for up to one hour. A verified phone received within that window selects messenger delivery. If the hour ends first, the original text is sent through Beeline. The selected route is stored and does not switch after the cutoff, including after a restart.
+
+The wait starts only after the invitation provider accepts the SMS. Failed invitation attempts are bounded; after they are exhausted, the original uses the SMS fallback without waiting indefinitely. Scheduled messages do not invite before `schedule`, and an earlier explicit `deadline` ends the wait without extending it. Each recipient has its own durable delivery task, so the parent message succeeds only after every recipient succeeds. Retrying a partially delivered onboarding message creates work only for recipients that have not already succeeded.
+
+The service checks the original phone against the stop list immediately before the invitation, messenger delivery, and SMS fallback. Tagged TG/MAX messages remain unsupported. Because the fallback must preserve the notification, an unknown phone accepts only plain subject/body content; markup modes, non-plain format values, files, and attachments return a validation error before queueing. `format: "plain"` and an empty `parse_mode` are accepted. Rich content for a phone that is already bound stays on direct messenger delivery; if that binding disappears before execution, the task fails through the messenger provider instead of dropping content into an SMS fallback. The Beeline fallback body is the rendered subject followed by a newline and the rendered body, with empty parts omitted. Opaque messenger IDs and usernames keep their existing direct-provider behavior and are never interpreted as phone numbers.
 
 ### Template values and client workflow
 

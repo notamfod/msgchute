@@ -11,10 +11,18 @@ type Config struct {
 }
 
 type ProviderConfig struct {
-	Provider        string          `yaml:"provider"`
-	Channel         string          `yaml:"channel"`
-	RetrierSettings RetrierSettings `yaml:"settings"`
-	Params          map[string]any  `yaml:"params"`
+	Provider        string            `yaml:"provider"`
+	Channel         string            `yaml:"channel"`
+	RetrierSettings RetrierSettings   `yaml:"settings"`
+	Params          map[string]any    `yaml:"params"`
+	Onboarding      *OnboardingConfig `yaml:"onboarding"`
+}
+
+type OnboardingConfig struct {
+	Enabled      bool   `yaml:"enabled"`
+	BotID        string `yaml:"botID"`
+	SMSTransport string `yaml:"smsTransport"`
+	ConnectURL   string `yaml:"connectURL"`
 }
 
 type RetrierSettings struct {

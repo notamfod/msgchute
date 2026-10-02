@@ -17,8 +17,9 @@ import (
 )
 
 type stopListStub struct {
-	blocked map[string]struct{}
-	err     error
+	blocked     map[string]struct{}
+	preferences map[string]dto.StopListEntry
+	err         error
 }
 
 type recordingProvider struct{ calls int }
@@ -54,6 +55,10 @@ func (s *stopListStub) Preferences(_ context.Context, _ string, recipients []str
 	}
 	result := map[string]dto.StopListEntry{}
 	for _, recipient := range recipients {
+		if entry, ok := s.preferences[recipient]; ok {
+			result[recipient] = entry
+			continue
+		}
 		if _, ok := s.blocked[recipient]; ok {
 			result[recipient] = dto.StopListEntry{Recipient: recipient, BlockedAll: true}
 		}
@@ -182,6 +187,43 @@ func TestSenderStopList(t *testing.T) {
 		require.NotNil(t, err)
 		assert.Equal(t, retrier.CriticalState, err.State)
 		assert.ErrorIs(t, err.Err, ErrUnknownPreferenceChannel)
+	})
+
+	t.Run("routed messenger recipient is checked by original phone", func(t *testing.T) {
+		stub.blocked = map[string]struct{}{"+79991234567": {}}
+		providerStub := &recordingProvider{}
+		pm.On("GetProvider", "tg").Return(providerStub, nil).Once()
+		templates.On("GenerateMessage", mock.Anything).Return("", "", nil).Once()
+		routed := &dto.Message{
+			Transport:         "tg",
+			Recipients:        dto.Recipients{"123456789"},
+			RoutingRecipients: dto.Recipients{"+79991234567"},
+		}
+		payload, _ := sonic.Marshal(routed)
+		_, err := NewSender(context.Background(), &Config{Providers: map[string]*ProviderConfig{"tg": {Provider: "telegram"}}}, pm, wm, templates, stoplist.New(stub)).sendFunc(context.Background(), payload)
+		require.NotNil(t, err)
+		assert.Equal(t, retrier.CriticalState, err.State)
+		assert.Zero(t, providerStub.calls)
+	})
+
+	t.Run("tagged invitation uses SMS subscriptions", func(t *testing.T) {
+		phone := "+79991234567"
+		stub.blocked = map[string]struct{}{}
+		stub.preferences = map[string]dto.StopListEntry{
+			phone: {Recipient: phone, Subscriptions: dto.SubscriptionList{"sms.order"}},
+		}
+		providerStub := &recordingProvider{}
+		pm.On("GetProvider", "beeline").Return(providerStub, nil).Once()
+		templates.On("GenerateMessage", mock.Anything).Return("", "", nil).Once()
+		store := onboardingTestStore(t)
+		invitation := store.invitationPayload(&onboardingInvitation{Phone: phone, SMSTransport: "beeline", ConnectURL: "https://example.test/connect"}, &dto.Message{Tag: "promotion"})
+		payload, marshalErr := sonic.Marshal(invitation)
+		require.NoError(t, marshalErr)
+		_, sendErr := NewSender(context.Background(), &Config{Providers: map[string]*ProviderConfig{"beeline": {Provider: "beeline"}}}, pm, wm, templates, stoplist.New(stub)).sendFunc(context.Background(), payload)
+		require.NotNil(t, sendErr)
+		assert.Equal(t, retrier.CriticalState, sendErr.State)
+		assert.Zero(t, providerStub.calls)
+		stub.preferences = nil
 	})
 
 	t.Run("invalid tagged recipient is terminal and not sent", func(t *testing.T) {

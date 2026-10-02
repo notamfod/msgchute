@@ -159,7 +159,7 @@ func (e *BatchSenderEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 }
 
 func isClientSendError(err error) bool {
-	return errors.Is(err, sender.ErrUnknownTransport) || errors.Is(err, sender.ErrInvalidTag) || errors.Is(err, sender.ErrUnknownPreferenceChannel) || errors.Is(err, template.ErrMissingParameters)
+	return errors.Is(err, sender.ErrUnknownTransport) || errors.Is(err, sender.ErrInvalidTag) || errors.Is(err, sender.ErrUnknownPreferenceChannel) || errors.Is(err, sender.ErrUnsupportedOnboardingContent) || errors.Is(err, template.ErrMissingParameters)
 }
 
 // Retry

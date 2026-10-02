@@ -26,4 +26,5 @@ type messageRepo interface {
 	GetByID(context.Context, uuid.UUID) (*dto.Message, error)
 	GetByIDs(context.Context, []uuid.UUID) ([]*dto.Message, error)
 	Create(context.Context, *dto.Message) error
+	UpdateStatus(context.Context, uuid.UUID, dto.MessageStatus) error
 }

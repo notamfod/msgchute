@@ -20,6 +20,7 @@ type WorkerStore struct {
 	taskResultRepo taskResultRepo
 	taskRepo       taskRepo
 	messageRepo    messageRepo
+	onboarding     *OnboardingStore
 }
 
 func NewWorkerStore(
@@ -28,14 +29,19 @@ func NewWorkerStore(
 	taskResultRepo taskResultRepo,
 	taskRepo taskRepo,
 	messageRepo messageRepo,
+	onboarding ...*OnboardingStore,
 ) *WorkerStore {
-	return &WorkerStore{
+	store := &WorkerStore{
 		ctx:            ctx,
 		db:             db,
 		taskResultRepo: taskResultRepo,
 		taskRepo:       taskRepo,
 		messageRepo:    messageRepo,
 	}
+	if len(onboarding) > 0 {
+		store.onboarding = onboarding[0]
+	}
+	return store
 }
 
 func (s *WorkerStore) GetTasks() ([]retrier.Task, error) {
@@ -81,21 +87,33 @@ func (s *WorkerStore) GetTasks() ([]retrier.Task, error) {
 				continue
 			}
 
-			payload, pErr := sonic.Marshal(messages[i])
-			if pErr != nil {
-				slog.Error("marshal message error",
-					slog.String("message_id", messages[i].ID.String()),
-					slog.Any("error", pErr))
-				continue
-			}
-
 			for _, task := range tasks {
+				message := messages[i]
+				worker := task.Worker
+				if s.onboarding != nil {
+					prepared, preparedWorker, ready, prepareErr := s.onboarding.Prepare(ctx, &task, message, now)
+					if prepareErr != nil {
+						return prepareErr
+					}
+					if !ready {
+						continue
+					}
+					message = prepared
+					worker = preparedWorker
+				}
+				payload, pErr := sonic.Marshal(message)
+				if pErr != nil {
+					slog.Error("marshal message error",
+						slog.String("message_id", messages[i].ID.String()),
+						slog.Any("error", pErr))
+					continue
+				}
 				taskIDs = append(taskIDs, task.ID)
 				result = append(result, retrier.Task{
 					ID:            task.ID,
 					Ctx:           s.ctx,
 					Payload:       payload,
-					Worker:        task.Worker,
+					Worker:        worker,
 					Status:        task.Status,
 					Retries:       task.Retries,
 					MaxRetries:    task.MaxRetries,
@@ -121,6 +139,11 @@ func (s *WorkerStore) GetTasks() ([]retrier.Task, error) {
 
 func (s *WorkerStore) SaveTask(task *retrier.Task, result *retrier.TaskExecutionResult) error {
 	return storage.InTransaction(context.TODO(), s.db, func(ctx context.Context) error {
+		if s.onboarding != nil {
+			if _, err := s.onboarding.LockTaskParent(ctx, task.ID); err != nil {
+				return err
+			}
+		}
 		taskData, err := s.taskRepo.GetByID(ctx, task.ID)
 		if err != nil {
 			slog.Error("get task error",
@@ -154,6 +177,14 @@ func (s *WorkerStore) SaveTask(task *retrier.Task, result *retrier.TaskExecution
 				slog.String("task_id", task.ID.String()),
 				slog.Any("error", err))
 			return err
+		}
+		if s.onboarding != nil {
+			if err := s.onboarding.TaskCompleted(ctx, task.ID, task.Status); err != nil {
+				return err
+			}
+			if _, err := s.onboarding.FinalizeTask(ctx, task.ID); err != nil {
+				return err
+			}
 		}
 
 		return nil

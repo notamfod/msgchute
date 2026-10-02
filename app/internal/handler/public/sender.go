@@ -6,12 +6,13 @@ import (
 
 type queue interface {
 	Add(*dto.Message) (*dto.Message, *dto.Task, error)
+	Preflight(*dto.Message) error
 	Validate(*dto.Message) error
 }
 
 func (h *BatchSenderHandler) Validate(messages []*dto.Message) error {
 	for _, message := range messages {
-		if err := h.q.Validate(message); err != nil {
+		if err := h.q.Preflight(message); err != nil {
 			return err
 		}
 	}
