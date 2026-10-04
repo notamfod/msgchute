@@ -196,6 +196,22 @@ func TestFinder_FindByID(t *testing.T) {
 	})
 }
 
+func TestFinder_FindByID_MissingRecord(t *testing.T) {
+	for _, id := range []uuid.UUID{uuid.Nil, uuid.New()} {
+		t.Run(id.String(), func(t *testing.T) {
+			msgRepo := new(MockMessageRepo)
+			msgRepo.On("GetByID", mock.Anything, id).Return(nil, nil).Once()
+			finder := NewFinder(nil, msgRepo, nil, nil)
+
+			result, err := finder.FindByID(id)
+
+			require.NoError(t, err)
+			assert.Nil(t, result)
+			msgRepo.AssertExpectations(t)
+		})
+	}
+}
+
 func TestFinder_GetSenders(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		mockRepo := new(MockMessageRepo)
