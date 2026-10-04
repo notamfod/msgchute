@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/go-playground/form"
@@ -198,6 +199,10 @@ func (e *MessageFinderByIDEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Req
 	msg, msgGetErr := e.h.Handle(ID)
 	if msgGetErr != nil {
 		response.WriteErrorResponse(w, r, http.StatusInternalServerError, msgGetErr)
+		return
+	}
+	if msg == nil {
+		response.WriteErrorResponse(w, r, http.StatusNotFound, errors.New("message not found"))
 		return
 	}
 	response.WriteSuccessResponse(w, r, http.StatusOK, msg)

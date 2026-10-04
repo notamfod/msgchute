@@ -88,6 +88,9 @@ func (f *Finder) FindByID(messageID uuid.UUID) (*dto.FullMessageInfo, error) {
 	if getMsgErr != nil {
 		return nil, getMsgErr
 	}
+	if msg == nil {
+		return nil, nil
+	}
 	tasks, getTasksErr := f.taskRepo.GetByMessageIDs(ctx, []uuid.UUID{msg.ID})
 	if getTasksErr != nil {
 		return nil, getTasksErr
