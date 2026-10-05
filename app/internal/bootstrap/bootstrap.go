@@ -109,6 +109,7 @@ func Bootstrap(ctx context.Context, cfgFilePath string) (*registry.AppRegistry, 
 				TemplateCreator: admin.NewTemplateCreateHandler(tmplMgr),
 				TemplateUpdater: admin.NewTemplateUpdateHandler(tmplMgr),
 				TemplateFinder:  admin.NewTemplateFinderHandler(tmplMgr),
+				TemplateDeleter: tmplMgr,
 
 				MessageFinder:          admin.NewMessageFindHandler(msgFinder),
 				MessageFindByID:        admin.NewMessageFindByIDHandler(msgFinder),

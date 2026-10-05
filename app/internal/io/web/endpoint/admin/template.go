@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/go-playground/form"
 
 	"github.com/devian2011/msgchute/internal/dto"
+	"github.com/devian2011/msgchute/internal/service/template"
 	"github.com/devian2011/msgchute/pkg/http/pagination"
 	"github.com/devian2011/msgchute/pkg/http/response"
 	"github.com/devian2011/msgchute/pkg/http/sort"
@@ -56,8 +58,10 @@ func NewTemplateFinderEndpoint(h templateFinderHandler) *TemplateFinderEndpoint 
 //	@Param			order		query		string					false	"Ascending or descending order selection (asc/desc)"
 //	@Param			code		query		[]string				false	"Filter metrics by unique message system code tokens"	collectionFormat(multi)
 //	@Param			search		query		string					false	"Generic phrase match expression matching structural text"
+//
 // @Param system query []string false "System tags (match any)" collectionFormat(multi)
 // @Param channel query []string false "Channel tags (match any)" collectionFormat(multi)
+//
 //	@Success		200			{object}	TemplateFinderResult	"Key-value dictionary mapping matching code IDs to schema definitions"
 //	@Failure		400			{object}	response.Response		"Query validation or structured query parameter parse errors"
 //	@Failure		500			{object}	response.Response		"Internal catalog resolution context errors"
@@ -131,15 +135,21 @@ func NewTemplateCreationEndpoint(h templateCreationHandler) *TemplateCreationEnd
 //	@Failure		400		{object}	response.Response	"Corrupted JSON payload body formatting syntax exception"
 //	@Failure		500		{object}	response.Response	"Persistence system errors encountered storing details"
 //	@Router			/api/admin/v1/template [post]
+//
+// @Failure 409 {object} response.Response "Template code already exists"
 func (e *TemplateCreationEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var template *dto.Template
-	if encodeErr := sonic.ConfigDefault.NewDecoder(r.Body).Decode(&template); encodeErr != nil {
+	var definition *dto.Template
+	if encodeErr := sonic.ConfigDefault.NewDecoder(r.Body).Decode(&definition); encodeErr != nil {
 		response.WriteErrorResponse(w, r, http.StatusBadRequest, encodeErr)
 		return
 	}
-	tmpl, createErr := e.h.Handle(template)
+	tmpl, createErr := e.h.Handle(definition)
 	if createErr != nil {
-		response.WriteErrorResponse(w, r, http.StatusInternalServerError, createErr)
+		status := http.StatusInternalServerError
+		if errors.Is(createErr, template.ErrTemplateAlreadyExists) {
+			status = http.StatusConflict
+		}
+		response.WriteErrorResponse(w, r, status, createErr)
 		return
 	}
 	response.WriteSuccessResponse(w, r, http.StatusOK, tmpl)

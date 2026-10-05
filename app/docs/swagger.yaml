@@ -278,6 +278,11 @@ definitions:
       pagination:
         $ref: '#/definitions/github_com_devian2011_msgchute_pkg_http_pagination.PageData'
     type: object
+  internal_io_web_endpoint_admin.TemplateDeletionResult:
+    properties:
+      code:
+        type: string
+    type: object
   internal_io_web_endpoint_admin.TemplateFinderResult:
     properties:
       pagination:
@@ -649,6 +654,10 @@ paths:
           description: Corrupted JSON payload body formatting syntax exception
           schema:
             $ref: '#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response'
+        "409":
+          description: Template code already exists
+          schema:
+            $ref: '#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response'
         "500":
           description: Persistence system errors encountered storing details
           schema:
@@ -657,6 +666,42 @@ paths:
       tags:
       - admin.templates
   /api/admin/v1/template/{code}:
+    delete:
+      description: Deletes a template by code. Historical message bodies are retained;
+        their template reference is cleared.
+      parameters:
+      - description: Stable template code
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_io_web_endpoint_admin.TemplateDeletionResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response'
+      summary: Delete a template
+      tags:
+      - admin.templates
     put:
       consumes:
       - application/json
