@@ -2,13 +2,17 @@ package template
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jmoiron/sqlx"
 
 	"github.com/devian2011/msgchute/internal/dto"
 	"github.com/devian2011/msgchute/internal/io/storage"
 )
+
+var ErrTemplateAlreadyExists = errors.New("template already exists")
 
 type generator interface {
 	GenerateString(
@@ -24,6 +28,7 @@ type templateRepo interface {
 	Create(ctx context.Context, t *dto.Template) error
 	Update(ctx context.Context, t *dto.Template) error
 	UpdateMetadata(ctx context.Context, code string, metadata dto.TemplateMetadata) error
+	Delete(ctx context.Context, code string) error
 }
 
 type Manager struct {
@@ -88,10 +93,15 @@ func (m *Manager) Create(tmpl *dto.Template) (*dto.Template, error) {
 			return fmt.Errorf("get template by code err: %w", getErr)
 		}
 		if existing != nil {
-			return fmt.Errorf("template with code: %s already exists", tmpl.Code)
+			return fmt.Errorf("%w: %s", ErrTemplateAlreadyExists, tmpl.Code)
 		}
 
-		return m.repo.Create(ctx, tmpl)
+		err := m.repo.Create(ctx, tmpl)
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "message_templates_pkey" {
+			return fmt.Errorf("%w: %s", ErrTemplateAlreadyExists, tmpl.Code)
+		}
+		return err
 	})
 
 	if trxErr != nil {

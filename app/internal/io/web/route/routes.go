@@ -102,6 +102,10 @@ func managementAPI(r *chi.Mux, handlers *registry.Handlers) *chi.Mux {
 		http.MethodPut,
 		"/api/admin/v1/template/{code}",
 		admin.NewTemplateUpdateEndpoint(handlers.Admin.TemplateUpdater))
+	r.Method(
+		http.MethodDelete,
+		"/api/admin/v1/template/{code}",
+		admin.NewTemplateDeletionEndpoint(handlers.Admin.TemplateDeleter))
 
 	r.Method(
 		http.MethodGet,

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -17,6 +18,10 @@ import (
 
 type MockRepo struct {
 	mock.Mock
+}
+
+func (m *MockRepo) Delete(ctx context.Context, code string) error {
+	return m.Called(ctx, code).Error(0)
 }
 
 func (m *MockRepo) UpdateMetadata(ctx context.Context, code string, metadata dto.TemplateMetadata) error {
@@ -219,7 +224,20 @@ func TestManager_Create(t *testing.T) {
 		created, err := mgr.Create(tmpl)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "already exists")
+		assert.ErrorIs(t, err, ErrTemplateAlreadyExists)
 		assert.Nil(t, created)
+		repo.AssertExpectations(t)
+		assert.NoError(t, sqlMock.ExpectationsWereMet())
+	})
+
+	t.Run("concurrent insert conflicts", func(t *testing.T) {
+		sqlMock.ExpectBegin()
+		repo.On("GetByCode", mock.Anything, "new_template").Return(nil, nil).Once()
+		repo.On("Create", mock.Anything, tmpl).Return(&pgconn.PgError{Code: "23505", ConstraintName: "message_templates_pkey"}).Once()
+		sqlMock.ExpectRollback()
+		created, err := mgr.Create(tmpl)
+		assert.Nil(t, created)
+		assert.ErrorIs(t, err, ErrTemplateAlreadyExists)
 		repo.AssertExpectations(t)
 		assert.NoError(t, sqlMock.ExpectationsWereMet())
 	})

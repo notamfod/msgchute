@@ -386,6 +386,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response"
                         }
                     },
+                    "409": {
+                        "description": "Template code already exists",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response"
+                        }
+                    },
                     "500": {
                         "description": "Persistence system errors encountered storing details",
                         "schema": {
@@ -441,6 +447,63 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Database or engine exceptions processing modified models",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Deletes a template by code. Historical message bodies are retained; their template reference is cleared.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin.templates"
+                ],
+                "summary": "Delete a template",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Stable template code",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_io_web_endpoint_admin.TemplateDeletionResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/github_com_devian2011_msgchute_pkg_http_response.Response"
                         }
@@ -1195,6 +1258,14 @@ const docTemplate = `{
                 },
                 "pagination": {
                     "$ref": "#/definitions/github_com_devian2011_msgchute_pkg_http_pagination.PageData"
+                }
+            }
+        },
+        "internal_io_web_endpoint_admin.TemplateDeletionResult": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
                 }
             }
         },
