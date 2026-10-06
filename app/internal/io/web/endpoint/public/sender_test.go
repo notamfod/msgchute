@@ -9,6 +9,7 @@ import (
 	"github.com/devian2011/msgchute/internal/dto"
 	publichandler "github.com/devian2011/msgchute/internal/handler/public"
 	"github.com/devian2011/msgchute/internal/service/sender"
+	"github.com/stretchr/testify/require"
 )
 
 type batchValidationStub struct {
@@ -16,7 +17,10 @@ type batchValidationStub struct {
 	err     error
 }
 type retryValidationStub struct{ err error }
-type senderValidationStub struct{ err error }
+type senderValidationStub struct {
+	err   error
+	calls int
+}
 
 type batchPreflightQueue struct {
 	adds       int
@@ -54,7 +58,30 @@ func (s *retryValidationStub) Handle(*dto.MessageRetryRequest) (*dto.Message, *d
 	return nil, nil, s.err
 }
 func (s *senderValidationStub) Handle(*dto.Message) (*dto.Message, *dto.Task, error) {
+	s.calls++
 	return nil, nil, s.err
+}
+
+func TestSenderRejectsUnknownBodySource(t *testing.T) {
+	stub := &senderValidationStub{}
+	recorder := httptest.NewRecorder()
+	NewSenderEndpoint(stub).ServeHTTP(
+		recorder,
+		httptest.NewRequest(http.MethodPost, "/api/v1/send", strings.NewReader(`{"transport":"beeline","body_source":"rendered"}`)),
+	)
+	require.Equal(t, http.StatusBadRequest, recorder.Code, recorder.Body.String())
+	require.Zero(t, stub.calls)
+}
+
+func TestBatchSenderRejectsUnknownBodySource(t *testing.T) {
+	stub := &batchValidationStub{}
+	recorder := httptest.NewRecorder()
+	NewBatchSenderEndpoint(stub).ServeHTTP(
+		recorder,
+		httptest.NewRequest(http.MethodPost, "/api/v1/batch/send", strings.NewReader(`[{"transport":"beeline","body_source":"rendered"}]`)),
+	)
+	require.Equal(t, http.StatusBadRequest, recorder.Code, recorder.Body.String())
+	require.False(t, stub.handled)
 }
 
 func TestBatchSenderRejectsUnknownTransportBeforeQueueing(t *testing.T) {

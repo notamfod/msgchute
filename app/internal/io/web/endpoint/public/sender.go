@@ -15,18 +15,19 @@ import (
 )
 
 type SenderMessageRequest struct {
-	SenderID   string            `json:"sender_id" db:"sender_id" validate:"required"`
-	Recipients dto.Recipients    `json:"recipients" db:"recipients" validate:"required"`
-	Meta       dto.MessageMeta   `json:"meta" db:"meta"`
-	Code       *string           `json:"code,omitempty" db:"code"`
-	Params     dto.MessageParams `json:"params,omitempty" db:"params"`
-	Transport  string            `json:"transport" db:"transport" validate:"required"` // Transport message provider
-	Tag        string            `json:"tag,omitempty"`
-	Subject    string            `json:"subject" db:"subject"`
-	Body       string            `json:"body" db:"body"`
-	Deadline   time.Time         `json:"deadline" db:"deadline"`
-	Retry      *dto.Retry        `json:"retry,omitempty" db:"retry"`
-	Schedule   time.Time         `json:"schedule,omitempty" db:"schedule"`
+	SenderID   string                `json:"sender_id" db:"sender_id" validate:"required"`
+	Recipients dto.Recipients        `json:"recipients" db:"recipients" validate:"required"`
+	Meta       dto.MessageMeta       `json:"meta" db:"meta"`
+	Code       *string               `json:"code,omitempty" db:"code"`
+	Params     dto.MessageParams     `json:"params,omitempty" db:"params"`
+	Transport  string                `json:"transport" db:"transport" validate:"required"` // Transport message provider
+	Tag        string                `json:"tag,omitempty"`
+	Subject    string                `json:"subject" db:"subject"`
+	Body       string                `json:"body" db:"body"`
+	BodySource dto.MessageBodySource `json:"body_source,omitempty" enums:"template,provided"` // "provided" preserves Body without template rendering.
+	Deadline   time.Time             `json:"deadline" db:"deadline"`
+	Retry      *dto.Retry            `json:"retry,omitempty" db:"retry"`
+	Schedule   time.Time             `json:"schedule,omitempty" db:"schedule"`
 }
 
 type senderHandler interface {
@@ -59,6 +60,10 @@ func (e *SenderEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		response.WriteErrorResponse(w, r, http.StatusBadRequest, decodeErr)
 		return
 	}
+	if !msgRequest.BodySource.Valid() {
+		response.WriteErrorResponse(w, r, http.StatusBadRequest, sender.ErrInvalidBodySource)
+		return
+	}
 
 	msgResult, taskResult, sendErr := e.h.Handle(&dto.Message{
 		ID:         uuid.UUID{},
@@ -72,6 +77,7 @@ func (e *SenderEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Tag:        msgRequest.Tag,
 		Subject:    msgRequest.Subject,
 		Body:       msgRequest.Body,
+		BodySource: msgRequest.BodySource,
 		Deadline:   msgRequest.Deadline,
 		Retry:      msgRequest.Retry,
 		Schedule:   msgRequest.Schedule,
@@ -127,6 +133,10 @@ func (e *BatchSenderEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 
 	messages := make([]*dto.Message, 0, len(request))
 	for i := range request {
+		if !request[i].BodySource.Valid() {
+			response.WriteErrorResponse(w, r, http.StatusBadRequest, sender.ErrInvalidBodySource)
+			return
+		}
 		messages = append(messages, &dto.Message{
 			ID:         uuid.UUID{},
 			SenderID:   request[i].SenderID,
@@ -139,6 +149,7 @@ func (e *BatchSenderEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 			Tag:        request[i].Tag,
 			Subject:    request[i].Subject,
 			Body:       request[i].Body,
+			BodySource: request[i].BodySource,
 			Deadline:   request[i].Deadline,
 			Retry:      request[i].Retry,
 			Schedule:   request[i].Schedule,
@@ -159,7 +170,7 @@ func (e *BatchSenderEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 }
 
 func isClientSendError(err error) bool {
-	return errors.Is(err, sender.ErrUnknownTransport) || errors.Is(err, sender.ErrInvalidTag) || errors.Is(err, sender.ErrUnknownPreferenceChannel) || errors.Is(err, sender.ErrUnsupportedOnboardingContent) || errors.Is(err, template.ErrMissingParameters)
+	return errors.Is(err, sender.ErrUnknownTransport) || errors.Is(err, sender.ErrInvalidTag) || errors.Is(err, sender.ErrUnknownPreferenceChannel) || errors.Is(err, sender.ErrUnsupportedOnboardingContent) || errors.Is(err, sender.ErrInvalidBodySource) || errors.Is(err, template.ErrMissingParameters)
 }
 
 // Retry

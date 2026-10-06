@@ -74,7 +74,7 @@ func TestWorkerStore_GetTasks_Success(t *testing.T) {
 		NextRun:   now.Add(-time.Minute),
 	}
 
-	msg1 := dto.Message{ID: msgID1, Subject: "subj1", Body: "body1"}
+	msg1 := dto.Message{ID: msgID1, Subject: "subj1", Body: "body1", BodySource: dto.MessageBodySourceProvided}
 	msg2 := dto.Message{ID: msgID2, Subject: "subj2", Body: "body2"}
 
 	taskMap := map[uuid.UUID][]dto.Task{
@@ -116,6 +116,7 @@ func TestWorkerStore_GetTasks_Success(t *testing.T) {
 			err = sonic.Unmarshal(task.Payload, &payloadMsg)
 			require.NoError(t, err)
 			assert.Equal(t, msg1.ID, payloadMsg.ID)
+			assert.Equal(t, dto.MessageBodySourceProvided, payloadMsg.BodySource)
 			found++
 		} else if task.ID == taskID2 {
 			assert.Equal(t, retrier.StatusPending, task.Status)
