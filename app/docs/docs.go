@@ -907,6 +907,18 @@ const docTemplate = `{
                 "body": {
                     "type": "string"
                 },
+                "body_source": {
+                    "description": "BodySource \"provided\" preserves Body without template rendering.",
+                    "enum": [
+                        "template",
+                        "provided"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_devian2011_msgchute_internal_dto.MessageBodySource"
+                        }
+                    ]
+                },
                 "code": {
                     "description": "Code template code",
                     "type": "string"
@@ -962,6 +974,17 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        },
+        "github_com_devian2011_msgchute_internal_dto.MessageBodySource": {
+            "type": "string",
+            "enum": [
+                "template",
+                "provided"
+            ],
+            "x-enum-varnames": [
+                "MessageBodySourceTemplate",
+                "MessageBodySourceProvided"
+            ]
         },
         "github_com_devian2011_msgchute_internal_dto.MessageDictionaries": {
             "type": "object",
@@ -1327,6 +1350,18 @@ const docTemplate = `{
                 "body": {
                     "type": "string"
                 },
+                "body_source": {
+                    "description": "\"provided\" preserves Body without template rendering.",
+                    "enum": [
+                        "template",
+                        "provided"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_devian2011_msgchute_internal_dto.MessageBodySource"
+                        }
+                    ]
+                },
                 "code": {
                     "type": "string"
                 },
@@ -1348,6 +1383,18 @@ const docTemplate = `{
             "properties": {
                 "body": {
                     "type": "string"
+                },
+                "body_source": {
+                    "description": "\"provided\" preserves Body without template rendering.",
+                    "enum": [
+                        "template",
+                        "provided"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/github_com_devian2011_msgchute_internal_dto.MessageBodySource"
+                        }
+                    ]
                 },
                 "code": {
                     "type": "string"

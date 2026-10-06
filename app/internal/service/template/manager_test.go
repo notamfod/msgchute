@@ -168,6 +168,136 @@ func TestManager_GenerateMessage(t *testing.T) {
 	}
 }
 
+func TestManager_GenerateMessageWithProvidedBody(t *testing.T) {
+	required := true
+	for _, tt := range []struct {
+		name        string
+		message     *dto.Message
+		template    *dto.Template
+		wantSubject string
+		wantBody    string
+		wantMissing bool
+	}{
+		{
+			name: "without template code preserves body bytes",
+			message: &dto.Message{
+				BodySource: dto.MessageBodySourceProvided,
+				Subject:    "Plain subject",
+				Body:       "Привет\n&<> {{ untouched }} {% untouched %}",
+				Params:     dto.MessageParams{"name": {Value: "Alice"}},
+			},
+			wantSubject: "Plain subject",
+			wantBody:    "Привет\n&<> {{ untouched }} {% untouched %}",
+		},
+		{
+			name: "body-only required parameter does not block provided body",
+			message: &dto.Message{
+				Code:       helper.Ptr("welcome"),
+				BodySource: dto.MessageBodySourceProvided,
+				Body:       "edited {{ body_value }}",
+				Params:     dto.MessageParams{"subject_value": {Value: "Alice"}},
+			},
+			template: &dto.Template{
+				Code:    "welcome",
+				Subject: "Hello {{ subject_value }}",
+				Body:    "Original {{ body_value }}",
+				Params: dto.TemplateParams{
+					"subject_value": {Required: &required},
+					"body_value":    {Required: &required},
+				},
+			},
+			wantSubject: "Hello Alice",
+			wantBody:    "edited {{ body_value }}",
+		},
+		{
+			name: "required subject parameter still enforced",
+			message: &dto.Message{
+				Code:       helper.Ptr("welcome"),
+				BodySource: dto.MessageBodySourceProvided,
+				Body:       "edited",
+			},
+			template: &dto.Template{
+				Code:    "welcome",
+				Subject: "Hello {{ subject_value }}",
+				Body:    "Original {{ body_value }}",
+				Params: dto.TemplateParams{
+					"subject_value": {Required: &required},
+					"body_value":    {Required: &required},
+				},
+			},
+			wantMissing: true,
+		},
+		{
+			name: "template source still renders template body",
+			message: &dto.Message{
+				Code:       helper.Ptr("welcome"),
+				Body:       "ignored",
+				BodySource: dto.MessageBodySourceTemplate,
+				Params: dto.MessageParams{
+					"subject_value": {Value: "Alice"},
+					"body_value":    {Value: "rendered"},
+				},
+			},
+			template: &dto.Template{
+				Code:    "welcome",
+				Subject: "Hello {{ subject_value }}",
+				Body:    "Original {{ body_value }}",
+				Params: dto.TemplateParams{
+					"subject_value": {Required: &required},
+					"body_value":    {Required: &required},
+				},
+			},
+			wantSubject: "Hello Alice",
+			wantBody:    "Original rendered",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := new(MockRepo)
+			if tt.template != nil {
+				repo.On("GetByCode", context.Background(), tt.template.Code).Return(tt.template, nil).Once()
+			}
+			generator, err := NewGenerator()
+			require.NoError(t, err)
+			db, _, err := sqlmock.New()
+			require.NoError(t, err)
+			defer db.Close()
+
+			manager := NewManager(sqlx.NewDb(db, "postgres"), generator, repo)
+			subject, body, err := manager.GenerateMessage(tt.message)
+			if tt.wantMissing {
+				require.ErrorIs(t, err, ErrMissingParameters)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantSubject, subject)
+			require.Equal(t, tt.wantBody, body)
+			repo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestTemplateParamsUsedBy(t *testing.T) {
+	params := dto.TemplateParams{
+		"name":        {},
+		"show_name":   {},
+		"literal_key": {},
+		"body_only":   {},
+	}
+	used := templateParamsUsedBy(
+		`{% if show_name %}{{ name | uppercase }} {{ "literal_key" }}{% endif %}`,
+		params,
+	)
+	require.ElementsMatch(t, []string{"name", "show_name"}, mapKeys(used))
+}
+
+func mapKeys(values map[string]*dto.TemplateParam) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
 func TestManager_Find(t *testing.T) {
 	repo := new(MockRepo)
 	db, _, err := sqlmock.New()

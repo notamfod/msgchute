@@ -12,10 +12,11 @@ import (
 )
 
 type PreviewMessageRequest struct {
-	Code    *string           `json:"code,omitempty" db:"code"`
-	Params  dto.MessageParams `json:"params,omitempty" db:"params"`
-	Subject string            `json:"subject" db:"subject"`
-	Body    string            `json:"body" db:"body"`
+	Code       *string               `json:"code,omitempty" db:"code"`
+	Params     dto.MessageParams     `json:"params,omitempty" db:"params"`
+	Subject    string                `json:"subject" db:"subject"`
+	Body       string                `json:"body" db:"body"`
+	BodySource dto.MessageBodySource `json:"body_source,omitempty" enums:"template,provided"` // "provided" preserves Body without template rendering.
 }
 
 type previewHandler interface {
@@ -48,11 +49,16 @@ func (e *MessagePreviewEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		response.WriteErrorResponse(w, r, http.StatusBadRequest, decodeErr)
 		return
 	}
+	if !req.BodySource.Valid() {
+		response.WriteErrorResponse(w, r, http.StatusBadRequest, errors.New("invalid message body source"))
+		return
+	}
 	msg := &dto.Message{
-		Code:    req.Code,
-		Params:  req.Params,
-		Subject: req.Subject,
-		Body:    req.Body,
+		Code:       req.Code,
+		Params:     req.Params,
+		Subject:    req.Subject,
+		Body:       req.Body,
+		BodySource: req.BodySource,
 	}
 
 	preview, previewErr := e.h.Handle(msg)
