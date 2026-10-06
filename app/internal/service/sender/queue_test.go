@@ -39,6 +39,9 @@ func TestQueueValidateTaggedMessage(t *testing.T) {
 	if err := queue.Validate(&dto.Message{Transport: "missing", Tag: "order"}); !errors.Is(err, ErrUnknownTransport) {
 		t.Fatalf("Validate() error = %v", err)
 	}
+	if err := queue.Validate(&dto.Message{Transport: "mail", BodySource: "rendered"}); !errors.Is(err, ErrInvalidBodySource) {
+		t.Fatalf("Validate() error = %v", err)
+	}
 }
 
 func TestQueue_Add(t *testing.T) {

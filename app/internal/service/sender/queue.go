@@ -20,6 +20,7 @@ var (
 	ErrUnknownTransport         = errors.New("unknown transport")
 	ErrInvalidTag               = errors.New("invalid message tag")
 	ErrUnknownPreferenceChannel = errors.New("unknown preference channel")
+	ErrInvalidBodySource        = errors.New("invalid message body source")
 )
 
 type Queue struct {
@@ -189,6 +190,9 @@ func distinctOnboardingRecipients(recipients dto.Recipients) []string {
 func (s *Queue) Validate(message *dto.Message) error {
 	if message == nil {
 		return ErrUnknownTransport
+	}
+	if !message.BodySource.Valid() {
+		return ErrInvalidBodySource
 	}
 	p := s.providers[message.Transport]
 	if p == nil {
