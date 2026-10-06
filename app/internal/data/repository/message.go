@@ -20,7 +20,7 @@ const messagesTable = "messages"
 var messageColumns = []string{
 	"id", "sender_id", "transport", "template_code AS code",
 	"recipients", "params", "retry", "schedule",
-	"deadline", "subject", "body", "status", "meta", "tag",
+	"deadline", "subject", "body", "body_source", "status", "meta", "tag",
 }
 
 type MessageRepository struct {
@@ -54,12 +54,12 @@ func (r *MessageRepository) Create(ctx context.Context, m *dto.Message) error {
 		Columns(
 			"id", "sender_id", "transport", "template_code",
 			"recipients", "params", "retry", "schedule",
-			"deadline", "subject", "body", "status", "meta", "tag",
+			"deadline", "subject", "body", "body_source", "status", "meta", "tag",
 		).
 		Values(
 			m.ID, m.SenderID, m.Transport, m.Code,
 			m.Recipients, m.Params, m.Retry, m.Schedule,
-			m.Deadline, m.Subject, m.Body, status, m.Meta, m.Tag,
+			m.Deadline, m.Subject, m.Body, m.BodySource, status, m.Meta, m.Tag,
 		).
 		ToSql()
 	if err != nil {

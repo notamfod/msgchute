@@ -40,6 +40,13 @@ definitions:
     properties:
       body:
         type: string
+      body_source:
+        allOf:
+        - $ref: '#/definitions/github_com_devian2011_msgchute_internal_dto.MessageBodySource'
+        description: BodySource "provided" preserves Body without template rendering.
+        enum:
+        - template
+        - provided
       code:
         description: Code template code
         type: string
@@ -79,6 +86,14 @@ definitions:
     - sender_id
     - transport
     type: object
+  github_com_devian2011_msgchute_internal_dto.MessageBodySource:
+    enum:
+    - template
+    - provided
+    type: string
+    x-enum-varnames:
+    - MessageBodySourceTemplate
+    - MessageBodySourceProvided
   github_com_devian2011_msgchute_internal_dto.MessageDictionaries:
     properties:
       sender_ids:
@@ -316,6 +331,13 @@ definitions:
     properties:
       body:
         type: string
+      body_source:
+        allOf:
+        - $ref: '#/definitions/github_com_devian2011_msgchute_internal_dto.MessageBodySource'
+        description: '"provided" preserves Body without template rendering.'
+        enum:
+        - template
+        - provided
       code:
         type: string
       params:
@@ -327,6 +349,13 @@ definitions:
     properties:
       body:
         type: string
+      body_source:
+        allOf:
+        - $ref: '#/definitions/github_com_devian2011_msgchute_internal_dto.MessageBodySource'
+        description: '"provided" preserves Body without template rendering.'
+        enum:
+        - template
+        - provided
       code:
         type: string
       deadline:

@@ -3,11 +3,17 @@ package template
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	"github.com/jmoiron/sqlx"
 
 	"github.com/devian2011/msgchute/internal/dto"
 	"github.com/devian2011/msgchute/internal/io/storage"
+)
+
+var (
+	templateTagPattern        = regexp.MustCompile(`(?s){{.*?}}|{%.*?%}`)
+	templateIdentifierPattern = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*`)
 )
 
 type generator interface {
@@ -63,10 +69,18 @@ func (m *Manager) GenerateMessage(t *dto.Message) (subject string, body string, 
 		bSubject = tmpl.Subject
 		bBody = tmpl.Body
 	}
+	if t.BodySource == dto.MessageBodySourceProvided {
+		bBody = t.Body
+		tmplParams = templateParamsUsedBy(bSubject, tmplParams)
+	}
 
 	subject, genSubjectErr = m.generator.GenerateString(bSubject, t.Params, tmplParams)
 	if genSubjectErr != nil {
 		return "", "", genSubjectErr
+	}
+
+	if t.BodySource == dto.MessageBodySourceProvided {
+		return subject, bBody, nil
 	}
 
 	body, genBodyErr = m.generator.GenerateString(bBody, t.Params, tmplParams)
@@ -75,6 +89,46 @@ func (m *Manager) GenerateMessage(t *dto.Message) (subject string, body string, 
 	}
 
 	return subject, body, nil
+}
+
+func templateParamsUsedBy(tmpl string, params map[string]*dto.TemplateParam) map[string]*dto.TemplateParam {
+	usedNames := make(map[string]struct{})
+	for _, tag := range templateTagPattern.FindAllString(tmpl, -1) {
+		for _, name := range templateIdentifierPattern.FindAllString(stripQuotedTemplateText(tag), -1) {
+			usedNames[name] = struct{}{}
+		}
+	}
+	used := make(map[string]*dto.TemplateParam)
+	for name, definition := range params {
+		if _, ok := usedNames[name]; ok {
+			used[name] = definition
+		}
+	}
+	return used
+}
+
+func stripQuotedTemplateText(value string) string {
+	result := []rune(value)
+	var quote rune
+	escaped := false
+	for i, char := range result {
+		if quote == 0 {
+			if char == '\'' || char == '"' {
+				quote = char
+				result[i] = ' '
+			}
+			continue
+		}
+		result[i] = ' '
+		if char == quote && !escaped {
+			quote = 0
+		}
+		escaped = char == '\\' && !escaped
+		if char != '\\' {
+			escaped = false
+		}
+	}
+	return string(result)
 }
 
 func (m *Manager) Find(filter *dto.MessageTemplateFilter) (map[string]*dto.Template, uint64, error) {

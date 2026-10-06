@@ -12,12 +12,23 @@ import (
 
 type MessageStatus string
 
+type MessageBodySource string
+
 const (
 	MessageStatusRunning   MessageStatus = "running"
 	MessageStatusSucceeded MessageStatus = "succeeded"
 	MessageStatusFailed    MessageStatus = "failed"
 	MessageStatusDeclined  MessageStatus = "declined"
 )
+
+const (
+	MessageBodySourceTemplate MessageBodySource = "template"
+	MessageBodySourceProvided MessageBodySource = "provided"
+)
+
+func (s MessageBodySource) Valid() bool {
+	return s == "" || s == MessageBodySourceTemplate || s == MessageBodySourceProvided
+}
 
 // MessageFilter defines evaluation criteria for advanced message querying, pagination, and sorting.
 type MessageFilter struct {
@@ -46,20 +57,21 @@ type MessageRetryRequest struct {
 
 // Message represents the core message entity tracking dispatch metadata and payload definitions.
 type Message struct {
-	ID         uuid.UUID     `json:"id" db:"id"`
-	SenderID   string        `json:"sender_id" db:"sender_id" validate:"required"`
-	Recipients Recipients    `json:"recipients" db:"recipients" validate:"required"`
-	Status     MessageStatus `json:"status" db:"status"`
-	Meta       MessageMeta   `json:"metadata" db:"meta"`                           // Meta some additional fields like CC Bcc or Files etc.
-	Code       *string       `json:"code,omitempty" db:"code"`                     // Code template code
-	Params     MessageParams `json:"params,omitempty" db:"params"`                 // Params message params for generate templates
-	Transport  string        `json:"transport" db:"transport" validate:"required"` // Transport message provider
-	Tag        string        `json:"tag,omitempty" db:"tag"`
-	Subject    string        `json:"subject" db:"subject"`
-	Body       string        `json:"body" db:"body"`
-	Deadline   time.Time     `json:"deadline" db:"deadline"`
-	Retry      *Retry        `json:"retry,omitempty" db:"retry"`
-	Schedule   time.Time     `json:"schedule,omitempty" db:"schedule"`
+	ID         uuid.UUID         `json:"id" db:"id"`
+	SenderID   string            `json:"sender_id" db:"sender_id" validate:"required"`
+	Recipients Recipients        `json:"recipients" db:"recipients" validate:"required"`
+	Status     MessageStatus     `json:"status" db:"status"`
+	Meta       MessageMeta       `json:"metadata" db:"meta"`                           // Meta some additional fields like CC Bcc or Files etc.
+	Code       *string           `json:"code,omitempty" db:"code"`                     // Code template code
+	Params     MessageParams     `json:"params,omitempty" db:"params"`                 // Params message params for generate templates
+	Transport  string            `json:"transport" db:"transport" validate:"required"` // Transport message provider
+	Tag        string            `json:"tag,omitempty" db:"tag"`
+	Subject    string            `json:"subject" db:"subject"`
+	Body       string            `json:"body" db:"body"`
+	BodySource MessageBodySource `json:"body_source,omitempty" db:"body_source" enums:"template,provided"` // BodySource "provided" preserves Body without template rendering.
+	Deadline   time.Time         `json:"deadline" db:"deadline"`
+	Retry      *Retry            `json:"retry,omitempty" db:"retry"`
+	Schedule   time.Time         `json:"schedule,omitempty" db:"schedule"`
 
 	// RoutingRecipients carries the original phone recipients in internal worker payloads.
 	// It is not stored with the message and is populated only by the onboarding router.
